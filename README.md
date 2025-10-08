@@ -2,6 +2,7 @@
 
 ## Command
 main command: `Atone`
+
 subcommand: `toggle`, `open`, `close`, `focus`
 
 ## Configuration
@@ -34,6 +35,10 @@ M.opts = {
 
 
 ## Highlight
-`ID`: { link = "Number" }
-`CurrentNode`: { link = "Keyword" }
-`IDBracket`: { link = "Comment" }
+- `ID`: { link = "Number" }
+- `CurrentNode`: { link = "Keyword" }
+- `IDBracket`: { link = "Comment" }
+
+## Credits
+- Heavily inspired by [vim-mundo](https://github.com/simnalamburt/vim-mundo)
+- Reference user commands implementation from [nvim-best-practices](https://github.com/nvim-neorocks/nvim-best-practices)
