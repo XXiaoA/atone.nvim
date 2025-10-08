@@ -48,7 +48,7 @@ local function init()
         callback = function()
             --  2 * (total - id) + 1 = line
             local id_under_cursor = _tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2
-            if id_under_cursor % 1 == 0 then -- integer
+            if _tree.total ~= 0 and id_under_cursor % 1 == 0 then -- integer
                 local before_ctx = diff.get_context(M.attach_buf, id_under_cursor - 1)
                 local cur_ctx = diff.get_context(M.attach_buf, id_under_cursor)
                 local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
