@@ -1,11 +1,37 @@
 # Atone.nvim
 
+_atone.nvim_ is a modern undotree plugin for Neovim.
+
+<!-- vim-markdown-toc GFM -->
+
+- [Install](#install)
+- [Command](#command)
+- [Configuration](#configuration)
+- [Highlight](#highlight)
+- [Credits](#credits)
+
+<!-- vim-markdown-toc -->
+
+## Install
+
+- using [nvim-plug](https://github.com/wsdjeg/nvim-plug)
+
+```lua
+require("plug").add({
+    "XXiaoA/atone.nvim",
+    cmds = { "Atone" },
+})
+```
+
+
 ## Command
+
 main command: `Atone`
 
 subcommand: `toggle`, `open`, `close`, `focus`
 
 ## Configuration
+
 ```lua
 M.opts = {
     layout = {
@@ -33,12 +59,13 @@ M.opts = {
 }
 ```
 
-
 ## Highlight
+
 - `ID`: { link = "Number" }
 - `CurrentNode`: { link = "Keyword" }
 - `IDBracket`: { link = "Comment" }
 
 ## Credits
+
 - Heavily inspired by [vim-mundo](https://github.com/simnalamburt/vim-mundo)
 - Reference user commands implementation from [nvim-best-practices](https://github.com/nvim-neorocks/nvim-best-practices)
