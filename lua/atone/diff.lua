@@ -11,7 +11,7 @@ function M.get_context(buf, n)
         return {}
     end
 
-    local result
+    local result = {}
     local tmp_file = fn.stdpath("cache") .. "/atone-undo"
     local tmp_undo = tmp_file .. ".undo"
     local tmpbuf = fn.bufadd(tmp_file)
