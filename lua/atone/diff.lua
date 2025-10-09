@@ -23,10 +23,12 @@ function M.get_context(buf, n)
     end)
     local ei = vim.o.eventignore
     vim.o.eventignore = "all"
-    api.nvim_buf_call(tmpbuf, function()
-        vim.cmd("silent rundo " .. tmp_undo)
-        vim.cmd("noautocmd silent undo " .. n)
-        result = api.nvim_buf_get_lines(tmpbuf, 0, -1, false)
+    pcall(function()
+        api.nvim_buf_call(tmpbuf, function()
+            vim.cmd("silent rundo " .. tmp_undo)
+            vim.cmd("noautocmd silent undo " .. n)
+            result = api.nvim_buf_get_lines(tmpbuf, 0, -1, false)
+        end)
     end)
     vim.o.eventignore = ei
     vim.api.nvim_buf_delete(tmpbuf, { force = true })
