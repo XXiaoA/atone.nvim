@@ -36,11 +36,11 @@ end
 
 local function init()
     _tree = tree:new()
-    _tree_buf = api.nvim_create_buf(false, true)
-    _auto_diff_buf = api.nvim_create_buf(false, true)
-    vim.schedule(function()
+    _tree_buf = utils.new_buf()
+    _auto_diff_buf = utils.new_buf()
+    if config.opts.diff_cur_node.enabled then
         api.nvim_set_option_value("syntax", "diff", { buf = _auto_diff_buf })
-    end)
+    end
 
     api.nvim_create_autocmd("CursorMoved", {
         buffer = _tree_buf,
@@ -48,7 +48,7 @@ local function init()
         callback = function()
             --  2 * (total - id) + 1 = line
             local id_under_cursor = _tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2
-            if id_under_cursor % 1 ~= 0 then
+            if id_under_cursor % 1 ~= 0 or not config.opts.diff_cur_node.enabled then
                 return
             end
             vim.schedule(function()
