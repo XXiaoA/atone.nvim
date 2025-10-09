@@ -1,13 +1,34 @@
-# Atone.nvim
+<p align="center">
+        <h2 align="center">atone.nvim</h2>
+</p>
+
+<p align="center">
+        Modern undotree plugin for nvim
+</p>
+
+<p align="center">
+        <a href="https://github.com/XXiaoA/atone.nvim/stargazers">
+                <img alt="Stars" src="https://img.shields.io/github/stars/XXiaoA/atone.nvim?style=for-the-badge&logo=starship&color=C9CBFF&logoColor=D9E0EE&labelColor=302D41"></a>
+        <a href="https://github.com/XXiaoA/atone.nvim/issues">
+                <img alt="Issues" src="https://img.shields.io/github/issues/XXiaoA/atone.nvim?style=for-the-badge&logo=bilibili&color=F5E0DC&logoColor=D9E0EE&labelColor=302D41"></a>
+        <a href="https://github.com/XXiaoA/atone.nvim">
+                <img alt="License" src="https://img.shields.io/github/license/XXiaoA/atone.nvim?color=%23DDB6F2&label=LICENSE&logo=codesandbox&style=for-the-badge&logoColor=D9E0EE&labelColor=302D41"/></a>
+</p>
+
+<img width="2536" height="1518" alt="Image" src="https://github.com/user-attachments/assets/2ed40e9a-c3da-49c6-888c-697aa4b391c8" />
 
 ## Command
+
 main command: `Atone`
 
-subcommand: `toggle`, `open`, `close`, `focus`
+subcommands: `toggle`, `open`, `close`, `focus`
 
 ## Configuration
+
+Default configuration:
+
 ```lua
-M.opts = {
+require("atone").setup({
     layout = {
         ---@type "left"|"right"
         direction = "left",
@@ -30,15 +51,17 @@ M.opts = {
         enabled = true,
         excluded_ft = { "oil" },
     },
-}
+})
 ```
 
 
 ## Highlight
-- `ID`: { link = "Number" }
-- `CurrentNode`: { link = "Keyword" }
-- `IDBracket`: { link = "Comment" }
+
+- `AtoneID`:  link to "Number"
+- `AtoneCurrentNode`:  link to "Keyword"
+- `AtoneIDBracket`:  link to "Comment"
 
 ## Credits
+
 - Heavily inspired by [vim-mundo](https://github.com/simnalamburt/vim-mundo)
-- Reference user commands implementation from [nvim-best-practices](https://github.com/nvim-neorocks/nvim-best-practices)
+- Refer to user commands implementation in [nvim-best-practices](https://github.com/nvim-neorocks/nvim-best-practices)
