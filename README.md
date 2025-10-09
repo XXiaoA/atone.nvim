@@ -70,9 +70,11 @@ require("atone").setup({
 
 ## Highlight
 
-- `ID`: { link = "Number" }
-- `CurrentNode`: { link = "Keyword" }
-- `IDBracket`: { link = "Comment" }
+| highlight          | default           |
+| ------------------ | ----------------- |
+| `AtoneID`          | link to `Number`  |
+| `AtoneCurrentNode` | link to `Keyword` |
+| `AtoneIDBracket`   | link to `Comment` |
 
 ## Credits
 
