@@ -38,7 +38,7 @@ local subcommand_tbl = {
     },
 }
 ---@param opts table :h lua-guide-commands-create
-local function atone_cmd(opts)
+function M.command(opts)
     local fargs = opts.fargs
     local subcommand_key = fargs[1]
     -- Get the subcommand's arguments, if any
@@ -52,13 +52,7 @@ local function atone_cmd(opts)
     subcommand.impl(args, opts)
 end
 
-function M.setup(user_opts)
-    user_opts = user_opts or {}
-    config.merge_config(user_opts)
-
-    api.nvim_create_user_command("Atone", atone_cmd, {
-        nargs = "+",
-        complete = function(arg_lead, cmdline, _)
+function M.command_complete(arg_lead, cmdline, _)
             -- Get the subcommand.
             local subcmd_key, subcmd_arg_lead = cmdline:match("^['<,'>]*Atone[!]*%s(%S+)%s(.*)$")
             if subcmd_key and subcmd_arg_lead and subcommand_tbl[subcmd_key] and subcommand_tbl[subcmd_key].complete then
@@ -75,10 +69,19 @@ function M.setup(user_opts)
                     end)
                     :totable()
             end
-        end,
-        bang = true,
-    })
+end
 
+function M.setup(user_opts)
+    user_opts = user_opts or {}
+    config.merge_config(user_opts)
+
+
+    -- lazy load plugin will not trigger ColorScheme event
+    -- so need to call set_highlights function in setup
+    set_highlights()
+
+    -- register call to ColorScheme event
+    -- reset highlights when colorscheme changed
     api.nvim_create_autocmd("ColorScheme", {
         group = core.augroup,
         callback = set_highlights,
