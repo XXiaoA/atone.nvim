@@ -129,6 +129,7 @@ function M.refresh()
             api.nvim_win_set_config(_tree_win, { width = fn.strchars(buf_lines[1]) + 5 })
         end
         utils.set_text(_tree_buf, buf_lines)
+
         local cur_line = (_tree.total - _tree.cur_id) * 2 + 1
         utils.color_char(
             _tree_buf,
@@ -137,6 +138,12 @@ function M.refresh()
             cur_line,
             _tree:node_at(_tree.cur_id).depth * 2 - 1 -- use node_at() because we maybe go to the original node
         )
+
+        local before_ctx = diff.get_context(M.attach_buf, _tree.cur_id - 1)
+        local cur_ctx = diff.get_context(M.attach_buf, _tree.cur_id)
+        local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
+        utils.set_text(_auto_diff_buf, diff_ctx)
+
         set_cursor(_tree.cur_id)
     end
 end
