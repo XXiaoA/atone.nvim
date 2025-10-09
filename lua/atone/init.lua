@@ -79,6 +79,11 @@ function M.setup(user_opts)
         bang = true,
     })
 
+    -- lazy load plugin will not trigger ColorScheme event
+    -- so need to call set_highlights function in setup
+    set_highlights()
+    -- register call to ColorScheme event
+    -- reset highlights when colorscheme changed
     api.nvim_create_autocmd("ColorScheme", {
         group = core.augroup,
         callback = set_highlights,
