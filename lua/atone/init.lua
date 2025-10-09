@@ -53,28 +53,27 @@ function M.command(opts)
 end
 
 function M.command_complete(arg_lead, cmdline, _)
-            -- Get the subcommand.
-            local subcmd_key, subcmd_arg_lead = cmdline:match("^['<,'>]*Atone[!]*%s(%S+)%s(.*)$")
-            if subcmd_key and subcmd_arg_lead and subcommand_tbl[subcmd_key] and subcommand_tbl[subcmd_key].complete then
-                -- The subcommand has completions. Return them.
-                return subcommand_tbl[subcmd_key].complete(subcmd_arg_lead)
-            end
-            -- Check if cmdline is a subcommand
-            if cmdline:match("^['<,'>]*Atone[!]*%s+%w*$") then
-                -- Filter subcommands that match
-                local subcommand_keys = vim.tbl_keys(subcommand_tbl)
-                return vim.iter(subcommand_keys)
-                    :filter(function(key)
-                        return key:find(arg_lead) ~= nil
-                    end)
-                    :totable()
-            end
+    -- Get the subcommand.
+    local subcmd_key, subcmd_arg_lead = cmdline:match("^['<,'>]*Atone[!]*%s(%S+)%s(.*)$")
+    if subcmd_key and subcmd_arg_lead and subcommand_tbl[subcmd_key] and subcommand_tbl[subcmd_key].complete then
+        -- The subcommand has completions. Return them.
+        return subcommand_tbl[subcmd_key].complete(subcmd_arg_lead)
+    end
+    -- Check if cmdline is a subcommand
+    if cmdline:match("^['<,'>]*Atone[!]*%s+%w*$") then
+        -- Filter subcommands that match
+        local subcommand_keys = vim.tbl_keys(subcommand_tbl)
+        return vim.iter(subcommand_keys)
+            :filter(function(key)
+                return key:find(arg_lead) ~= nil
+            end)
+            :totable()
+    end
 end
 
 function M.setup(user_opts)
     user_opts = user_opts or {}
     config.merge_config(user_opts)
-
 
     -- lazy load plugin will not trigger ColorScheme event
     -- so need to call set_highlights function in setup
