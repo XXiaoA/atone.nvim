@@ -89,8 +89,17 @@ local function init()
     end, { buffer = _tree_buf })
 end
 
+local function check()
+    if api.nvim_buf_is_valid(_auto_diff_buf) and api.nvim_buf_is_valid(_tree_buf) then
+        return true
+    end
+    M.close()
+    pcall(api.nvim_buf_delete, _tree_buf, false)
+    pcall(api.nvim_buf_delete, _auto_diff_buf, false)
+end
+
 function M.open()
-    if M._show == nil then
+    if M._show == nil or not check() then
         init()
     end
 
