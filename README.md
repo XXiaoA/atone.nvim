@@ -14,7 +14,7 @@ _atone.nvim_ is a modern undotree plugin for Neovim.
 
 ## Install
 
-- using [lazy.nvim]https://github.com/folke/lazy.nvim()
+- using [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```
 {
