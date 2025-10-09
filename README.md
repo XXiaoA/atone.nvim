@@ -14,6 +14,16 @@ _atone.nvim_ is a modern undotree plugin for Neovim.
 
 ## Install
 
+- using [lazy.nvim]https://github.com/folke/lazy.nvim()
+
+```
+{
+  "XXiaoA/atone.nvim",
+  cmd = "Atone"
+}
+
+```
+
 - using [nvim-plug](https://github.com/wsdjeg/nvim-plug)
 
 ```lua
@@ -22,7 +32,6 @@ require("plug").add({
     cmds = { "Atone" },
 })
 ```
-
 
 ## Command
 
@@ -33,7 +42,7 @@ subcommand: `toggle`, `open`, `close`, `focus`
 ## Configuration
 
 ```lua
-M.opts = {
+require("atone").setup({
     layout = {
         ---@type "left"|"right"
         direction = "left",
@@ -56,7 +65,7 @@ M.opts = {
         enabled = true,
         excluded_ft = { "oil" },
     },
-}
+})
 ```
 
 ## Highlight
