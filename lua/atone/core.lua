@@ -12,17 +12,17 @@ local M = {
 -- _float_win: we have one float window only at the same time
 -- _manual_diff_buf: diff result between current and given point (triggered by user), shown in float window
 -- _auto_diff_buf: diff result triggered automatically, shown in the window below tree graph
-local _tree, _tree_win, _float_win, _diff_win, _tree_buf, _help_buf, _manual_diff_buf, _auto_diff_buf
+local _tree_win, _float_win, _diff_win, _tree_buf, _help_buf, _manual_diff_buf, _auto_diff_buf
 
 --- position the cursor at a specific undo node in the tree graph
 ---@param id integer
 local function set_cursor(id)
     if id <= 0 then
-        api.nvim_win_set_cursor(_tree_win, { _tree.total * 2 + 1, 0 }) -- root node
-    elseif id <= _tree.total then
-        local lnum = (_tree.total - id) * 2 + 1
-        local column = _tree.nodes[id].depth * 2 - 1
-        column = vim.str_byteindex(_tree.lines[lnum], "utf-16", column - 1) + 1
+        api.nvim_win_set_cursor(_tree_win, { tree.total * 2 + 1, 0 }) -- root node
+    elseif id <= tree.total then
+        local lnum = (tree.total - id) * 2 + 1
+        local column = tree.nodes[id].depth * 2 - 1
+        column = vim.str_byteindex(tree.lines[lnum], "utf-16", column - 1) + 1
         api.nvim_win_set_cursor(_tree_win, { lnum, column })
     end
 end
@@ -35,7 +35,6 @@ local function undo_to(n)
 end
 
 local function init()
-    _tree = tree:new()
     _tree_buf = utils.new_buf()
     _auto_diff_buf = utils.new_buf()
     if config.opts.diff_cur_node.enabled then
@@ -47,7 +46,7 @@ local function init()
         group = M.augroup,
         callback = function()
             --  2 * (total - id) + 1 = line
-            local id_under_cursor = _tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2
+            local id_under_cursor = tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2
             if id_under_cursor % 1 ~= 0 or not config.opts.diff_cur_node.enabled then
                 return
             end
@@ -73,11 +72,11 @@ local function init()
     utils.keymap("n", "q", M.close, { buffer = _tree_buf })
     utils.keymap("n", "q", M.close, { buffer = _auto_diff_buf })
     utils.keymap("n", "j", function()
-        local id_under_cursor = math.ceil(_tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2)
+        local id_under_cursor = math.ceil(tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2)
         set_cursor(id_under_cursor - vim.v.count1)
     end, { buffer = _tree_buf })
     utils.keymap("n", "k", function()
-        local id_under_cursor = math.floor(_tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2)
+        local id_under_cursor = math.floor(tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2)
         set_cursor(id_under_cursor + vim.v.count1)
     end, { buffer = _tree_buf })
     utils.keymap("n", "<CR>", function()
@@ -135,28 +134,28 @@ end
 
 function M.refresh()
     if M._show then
-        _tree:convert(M.attach_buf)
-        local buf_lines = _tree:render()
+        tree.convert(M.attach_buf)
+        local buf_lines = tree.render()
         if config.opts.layout.width == "adaptive" then
             api.nvim_win_set_config(_tree_win, { width = fn.strchars(buf_lines[1]) + 5 })
         end
         utils.set_text(_tree_buf, buf_lines)
 
-        local cur_line = (_tree.total - _tree.cur_id) * 2 + 1
+        local cur_line = (tree.total - tree.cur_id) * 2 + 1
         utils.color_char(
             _tree_buf,
             "AtoneCurrentNode",
             buf_lines[cur_line],
             cur_line,
-            _tree:node_at(_tree.cur_id).depth * 2 - 1 -- use node_at() because we maybe go to the original node
+            tree.node_at(tree.cur_id).depth * 2 - 1 -- use node_at() because we maybe go to the original node
         )
 
-        local before_ctx = diff.get_context(M.attach_buf, _tree.cur_id - 1)
-        local cur_ctx = diff.get_context(M.attach_buf, _tree.cur_id)
+        local before_ctx = diff.get_context(M.attach_buf, tree.cur_id - 1)
+        local cur_ctx = diff.get_context(M.attach_buf, tree.cur_id)
         local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
         utils.set_text(_auto_diff_buf, diff_ctx)
 
-        set_cursor(_tree.cur_id)
+        set_cursor(tree.cur_id)
     end
 end
 
@@ -170,7 +169,7 @@ end
 
 function M.focus()
     if M._show then
-        set_cursor(_tree.cur_id)
+        set_cursor(tree.cur_id)
         api.nvim_set_current_win(_tree_win)
     end
 end
