@@ -59,6 +59,7 @@ function tree.convert(buf)
     local function flatten(rawtree, parent)
         for _, raw_node in ipairs(rawtree) do
             tree.nodes[raw_node.seq] = {
+                seq = raw_node.seq,
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
                 children = {},
