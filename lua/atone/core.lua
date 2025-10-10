@@ -36,11 +36,11 @@ end
 
 local function init()
     _tree = tree:new()
-    _tree_buf = api.nvim_create_buf(false, true)
-    _auto_diff_buf = api.nvim_create_buf(false, true)
-    vim.schedule(function()
+    _tree_buf = utils.new_buf()
+    _auto_diff_buf = utils.new_buf()
+    if config.opts.diff_cur_node.enabled then
         api.nvim_set_option_value("syntax", "diff", { buf = _auto_diff_buf })
-    end)
+    end
 
     api.nvim_create_autocmd("CursorMoved", {
         buffer = _tree_buf,
@@ -48,12 +48,15 @@ local function init()
         callback = function()
             --  2 * (total - id) + 1 = line
             local id_under_cursor = _tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2
-            if id_under_cursor % 1 == 0 then -- integer
+            if id_under_cursor % 1 ~= 0 or not config.opts.diff_cur_node.enabled then
+                return
+            end
+            vim.schedule(function()
                 local before_ctx = diff.get_context(M.attach_buf, id_under_cursor - 1)
                 local cur_ctx = diff.get_context(M.attach_buf, id_under_cursor)
                 local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
                 utils.set_text(_auto_diff_buf, diff_ctx)
-            end
+            end)
         end,
     })
     api.nvim_create_autocmd("WinClosed", {
@@ -86,8 +89,17 @@ local function init()
     end, { buffer = _tree_buf })
 end
 
+local function check()
+    if api.nvim_buf_is_valid(_auto_diff_buf) and api.nvim_buf_is_valid(_tree_buf) then
+        return true
+    end
+    M.close()
+    pcall(api.nvim_buf_delete, _tree_buf, false)
+    pcall(api.nvim_buf_delete, _auto_diff_buf, false)
+end
+
 function M.open()
-    if M._show == nil then
+    if M._show == nil or not check() then
         init()
     end
 

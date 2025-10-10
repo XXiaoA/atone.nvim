@@ -2,6 +2,19 @@ local api = vim.api
 
 local M = {}
 
+function M.new_buf()
+    local buf_opts = {
+        filetype = "atone",
+        buftype = "nofile",
+        modifiable = false,
+    }
+    local buf = api.nvim_create_buf(false, true)
+    for option, value in pairs(buf_opts) do
+        api.nvim_set_option_value(option, value, { buf = buf })
+    end
+    return buf
+end
+
 --- create a new window
 ---@param mode string `float` or a command passed to the `vim.cmd()`
 ---@param buf integer
@@ -21,11 +34,6 @@ function M.new_win(mode, buf, config, enter)
         winfixwidth = true,
         wrap = false,
     }
-    local buf_opts = {
-        filetype = "atone",
-        buftype = "nofile",
-        modifiable = false,
-    }
 
     if mode == "float" then
         win = api.nvim_open_win(buf, enter, config)
@@ -41,9 +49,6 @@ function M.new_win(mode, buf, config, enter)
 
     for option, value in pairs(win_opts) do
         api.nvim_set_option_value(option, value, { win = win })
-    end
-    for option, value in pairs(buf_opts) do
-        api.nvim_set_option_value(option, value, { buf = buf })
     end
 
     return win
