@@ -1,11 +1,18 @@
-local fn = vim.fn
+local api, fn = vim.api, vim.fn
 local time_ago = require("atone.utils").time_ago
 
--- get the character at column `col` (1-based index)
+--- get the character at column `col` (1-based index)
+---@param line string
+---@param col integer
+---@return string
 local function get_char(line, col)
     return fn.strcharpart(line, col - 1, 1)
 end
 
+--- change the char of str in pos index.
+---@param str string
+---@param pos integer
+---@param ch string
 local function set_char_at(str, pos, ch)
     local len = fn.strchars(str)
     if pos > len then
@@ -15,7 +22,7 @@ local function set_char_at(str, pos, ch)
     end
 end
 
-local tree = {
+local M = {
     root = {
         seq = 0,
         depth = 1,
@@ -26,21 +33,22 @@ local tree = {
     },
     nodes = {}, -- map { id: node }
     lines = {},
-    total = 0,
+    last_seq = 0,
     max_depth = 1,
-    cur_id = 0,
+    cur_seq = 0,
+    earliest_seq = 1, -- this value is not 1 when vim.o.undolevels < last_seq
 }
 
-function tree.node_at(id)
-    return id <= 0 and tree.root or tree.nodes[id]
+function M.node_at(seq)
+    return seq < M.earliest_seq and M.root or M.nodes[seq]
 end
 
-function tree.change_branch_depth(node_id, new_depth_baseline)
-    local depth_difference = new_depth_baseline - tree.node_at(node_id).depth
-    local queue = { node_id }
+function M.change_branch_depth(node_seq, new_depth_baseline)
+    local depth_difference = new_depth_baseline - M.node_at(node_seq).depth
+    local queue = { node_seq }
     local head = 1
     while head <= #queue do
-        local current_node = tree.node_at(queue[head])
+        local current_node = M.node_at(queue[head])
         head = head + 1
         current_node.depth = current_node.depth + depth_difference
         local children_ids = current_node.children
@@ -52,13 +60,13 @@ function tree.change_branch_depth(node_id, new_depth_baseline)
     end
 end
 
-function tree.convert(buf)
+function M.convert(buf)
     -- clear the tree.nodes!!!!
-    tree.nodes = {}
+    M.nodes = {}
     local undotree = fn.undotree(buf)
     local function flatten(rawtree, parent)
         for _, raw_node in ipairs(rawtree) do
-            tree.nodes[raw_node.seq] = {
+            M.nodes[raw_node.seq] = {
                 seq = raw_node.seq,
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
@@ -72,79 +80,91 @@ function tree.convert(buf)
     end
     flatten(undotree.entries, 0)
 
-    tree.cur_id = undotree.seq_cur
-    tree.total = undotree.seq_last
+    M.cur_seq = undotree.seq_cur
+    M.last_seq = undotree.seq_last
+
+    local ul = api.nvim_get_option_value("undolevels", { buf = buf })
+    if ul == -123456 then -- The local value is set to -123456 when the global value is to be used.
+        ul = api.nvim_get_option_value("undolevels", { scope = "global" })
+    end
+    if M.last_seq > ul + 1 then
+        M.earliest_seq = M.last_seq - ul
+        while not M.nodes[M.earliest_seq] do
+            M.earliest_seq = M.earliest_seq + 1
+        end
+    end
 
     -- set the depth: the depth of each branch depth = the depth of its root node's parent node plus 1
     local visited = {}
     -- determine the main branch with a depth of 1
     do
-        local id = undotree.seq_last
+        local seq = undotree.seq_last
         repeat
-            local node = tree.node_at(id)
+            local node = M.node_at(seq)
             node.depth = 1
-            visited[id] = true
-            id = node.parent
-        until id == 0
+            visited[seq] = true
+            seq = node.parent
+        until seq == 0
     end
     -- fill in depths for other branches
-    for id = tree.total - 1, 1, -1 do
-        if not visited[id] then
+    for seq = M.last_seq - 1, M.earliest_seq, -1 do
+        if not visited[seq] then
             local path = {}
-            local sub_id = id
-            local sub_node = tree.node_at(sub_id)
+            local sub_seq = seq
+            local sub_node = M.node_at(sub_seq)
             repeat
-                table.insert(path, sub_id)
-                visited[sub_id] = true
-                sub_id = sub_node.parent
-                sub_node = tree.node_at(sub_id)
+                table.insert(path, sub_seq)
+                visited[sub_seq] = true
+                sub_seq = sub_node.parent
+                sub_node = M.node_at(sub_seq)
             until sub_node.depth
-            local base_depth = tree.node_at(sub_id).depth
+            local base_depth = M.node_at(sub_seq).depth
             for _, i in ipairs(path) do
-                tree.node_at(i).depth = base_depth + 1
+                M.node_at(i).depth = base_depth + 1
             end
         end
     end
 
-    for id = tree.total, 1, -1 do
-        local node = tree.node_at(id)
-        local parent_node = tree.node_at(node.parent)
-        table.insert(parent_node.children, id)
+    for seq = M.last_seq, M.earliest_seq, -1 do
+        local node = M.node_at(seq)
+        local parent_node = M.node_at(node.parent)
+        table.insert(parent_node.children, seq)
         if node.depth == parent_node.depth then
-            parent_node.child = id
+            parent_node.child = seq
         end
     end
 
     -- adjust the depth
-    for id = tree.total, 2, -1 do
-        local node = tree.node_at(id)
-        if node.depth ~= 1 and id ~= node.parent + 1 and not node.fork then
-            for sub_id = id - 1, node.parent + 1, -1 do
-                local sub_node = tree.node_at(sub_id)
-                local sub_node_parent = tree.node_at(sub_node.parent)
+    for seq = M.last_seq, M.earliest_seq + 1, -1 do
+        local node = M.node_at(seq)
+        if node.depth ~= 1 and seq ~= node.parent + 1 and not node.fork then
+            for sub_seq = seq - 1, node.parent + 1, -1 do
+                local sub_node = M.node_at(sub_seq)
+                local sub_node_parent = M.node_at(sub_node.parent)
                 if
                     sub_node.depth == node.depth
                     and sub_node.depth ~= sub_node_parent.depth
-                    and (sub_node.parent ~= node.parent or id > tree.node_at(node.parent).child)
+                    and (sub_node.parent ~= node.parent or seq > M.node_at(node.parent).child)
                 then
-                    if sub_id < sub_node_parent.child then
+                    if sub_seq < sub_node_parent.child then
                         sub_node.fork = 1
                     end
-                    tree.change_branch_depth(sub_id, sub_node.depth + 1)
+                    M.change_branch_depth(sub_seq, sub_node.depth + 1)
                 end
             end
         end
     end
 
-    for _, node in ipairs(tree.nodes) do
-        tree.max_depth = math.max(tree.max_depth, node.depth)
+    for seq = M.earliest_seq, M.last_seq do
+        local node = M.node_at(seq)
+        M.max_depth = math.max(M.max_depth, node.depth)
     end
 
-    return tree.nodes
+    return M.nodes
 end
 
-function tree.render()
-    tree.lines = {}
+function M.render()
+    M.lines = {}
     -- we should reverse the table: put the node with greater id in the smaller index
     -- @    [4] 1
     -- |        2
@@ -156,18 +176,20 @@ function tree.render()
     -- |/       8  <- line after this node
     -- o    [0] 9
 
-    for id, node in ipairs(tree.nodes) do
-        local parent_depth = tree.node_at(node.parent).depth
-        local node_line = (tree.total - id) * 2 + 1
-        tree.lines[node_line + 1] = "│" -- line after this node
-        tree.lines[node_line] = "│"
-        tree.lines[node_line] = set_char_at(tree.lines[node_line], node.depth * 2 - 1, "●")
-        tree.lines[node_line] =
-            set_char_at(tree.lines[node_line], tree.max_depth * 2 + 4, "[" .. node.seq .. "] " .. time_ago(node.time))
+    for seq = M.earliest_seq, M.last_seq do
+        local node = M.nodes[seq]
+        local parent_depth = M.node_at(node.parent).depth
+        local node_line = (M.last_seq - seq) * 2 + 1
+        M.lines[node_line + 1] = "│" -- line after this node
+        M.lines[node_line] = "│"
+        M.lines[node_line] = set_char_at(M.lines[node_line], node.depth * 2 - 1, "●")
+        M.lines[node_line] =
+            set_char_at(M.lines[node_line], M.max_depth * 2 + 4, "[" .. node.seq .. "] " .. time_ago(node.time))
         if not node.fork and node.depth ~= 1 then
             local line_is_drawing = node_line + 1
             while
-                line_is_drawing < (tree.total - node.parent) * 2 + 1
+                line_is_drawing < (M.last_seq - node.parent) * 2 + 1
+                and line_is_drawing < (M.last_seq - M.earliest_seq + 1) * 2 + 1
                 -- ●
                 -- │
                 -- │ ●
@@ -175,44 +197,44 @@ function tree.render()
                 -- │ ●
                 -- ├─╯
                 -- ●
-                and get_char(tree.lines[line_is_drawing], node.depth * 2 - 1) ~= "●"
+                and get_char(M.lines[line_is_drawing], node.depth * 2 - 1) ~= "●"
             do
-                if get_char(tree.lines[line_is_drawing], node.depth * 2 - 1) ~= "├" then
-                    tree.lines[line_is_drawing] = set_char_at(tree.lines[line_is_drawing], node.depth * 2 - 1, "│")
+                if get_char(M.lines[line_is_drawing], node.depth * 2 - 1) ~= "├" then
+                    M.lines[line_is_drawing] = set_char_at(M.lines[line_is_drawing], node.depth * 2 - 1, "│")
                 end
                 line_is_drawing = line_is_drawing + 1
             end
             if node.depth ~= parent_depth then
                 line_is_drawing = line_is_drawing - 1
-                if get_char(tree.lines[line_is_drawing], node.depth * 2) == "─" then
+                if get_char(M.lines[line_is_drawing], node.depth * 2) == "─" then
                     --  ●
                     --  │
                     --  │ ●
                     -- ─┴─╯
                     --  ^
-                    tree.lines[line_is_drawing] = set_char_at(tree.lines[line_is_drawing], node.depth * 2 - 1, "┴")
+                    M.lines[line_is_drawing] = set_char_at(M.lines[line_is_drawing], node.depth * 2 - 1, "┴")
                 else
-                    tree.lines[line_is_drawing] = set_char_at(tree.lines[line_is_drawing], node.depth * 2 - 1, "╯")
+                    M.lines[line_is_drawing] = set_char_at(M.lines[line_is_drawing], node.depth * 2 - 1, "╯")
                 end
                 for pos = parent_depth * 2, node.depth * 2 - 2 do
-                    if get_char(tree.lines[line_is_drawing], pos) == " " then
-                        tree.lines[line_is_drawing] = set_char_at(tree.lines[line_is_drawing], pos, "─")
-                    elseif get_char(tree.lines[line_is_drawing], pos) == "╯" then
-                        tree.lines[line_is_drawing] = set_char_at(tree.lines[line_is_drawing], pos, "┴")
+                    if get_char(M.lines[line_is_drawing], pos) == " " then
+                        M.lines[line_is_drawing] = set_char_at(M.lines[line_is_drawing], pos, "─")
+                    elseif get_char(M.lines[line_is_drawing], pos) == "╯" then
+                        M.lines[line_is_drawing] = set_char_at(M.lines[line_is_drawing], pos, "┴")
                     end
                 end
-                tree.lines[line_is_drawing] = set_char_at(tree.lines[line_is_drawing], parent_depth * 2 - 1, "├")
+                M.lines[line_is_drawing] = set_char_at(M.lines[line_is_drawing], parent_depth * 2 - 1, "├")
             end
         elseif node.fork then
-            tree.lines[node_line] = set_char_at(tree.lines[node_line], parent_depth * 2 - 1, "├")
+            M.lines[node_line] = set_char_at(M.lines[node_line], parent_depth * 2 - 1, "├")
             for i = parent_depth * 2, node.depth * 2 - 2 do
-                tree.lines[node_line] = set_char_at(tree.lines[node_line], i, "─")
+                M.lines[node_line] = set_char_at(M.lines[node_line], i, "─")
             end
         end
     end
-    tree.lines[tree.total * 2 + 1] = "●" .. string.rep(" ", tree.max_depth * 2 + 2) .. "[0] Original"
+    M.lines[(M.last_seq - M.earliest_seq + 1) * 2 + 1] = "●" .. string.rep(" ", M.max_depth * 2 + 2) .. "[0] Original"
 
-    return tree.lines
+    return M.lines
 end
 
-return tree
+return M

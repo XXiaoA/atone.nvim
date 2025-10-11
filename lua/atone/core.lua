@@ -15,28 +15,50 @@ local M = {
 local _tree_win, _float_win, _diff_win, _tree_buf, _help_buf, _manual_diff_buf, _auto_diff_buf
 
 --- position the cursor at a specific undo node in the tree graph
----@param id integer
-local function set_cursor(id)
-    if id <= 0 then
-        api.nvim_win_set_cursor(_tree_win, { tree.total * 2 + 1, 0 }) -- root node
-    elseif id <= tree.total then
-        local lnum = (tree.total - id) * 2 + 1
-        local column = tree.nodes[id].depth * 2 - 1
+---@param seq integer
+local function set_cursor(seq)
+    if seq < tree.earliest_seq then
+        api.nvim_win_set_cursor(_tree_win, { (tree.last_seq - tree.earliest_seq + 1) * 2 + 1, 0 }) -- root nodt
+    elseif seq <= tree.last_seq then
+        local lnum = (tree.last_seq - seq) * 2 + 1
+        local column = tree.nodes[seq].depth * 2 - 1
         column = vim.str_byteindex(tree.lines[lnum], "utf-16", column - 1) + 1
         api.nvim_win_set_cursor(_tree_win, { lnum, column })
     end
 end
 
----@param n integer
-local function undo_to(n)
+---@param seq integer
+local function undo_to(seq)
+    if seq < tree.earliest_seq then
+        seq = 0
+    end
     api.nvim_buf_call(M.attach_buf, function()
-        vim.cmd("silent undo " .. n)
+        vim.cmd("silent undo " .. seq)
     end)
+end
+
+--- get the seq under cursor in _tree_win
+--- when the cursor is between two nodes, return the average (of their seq).
+---@return integer
+local function seq_under_cursor()
+    --  2 * (last_seq - cur_seq) + 1 = lnum
+    return tree.last_seq - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2
+end
+
+---@param seq integer
+local function get_context_at(seq)
+    if seq == tree.earliest_seq - 1 then
+        seq = 0
+    elseif seq < tree.earliest_seq - 1 then
+        seq = -1
+    end
+    return diff.get_context(M.attach_buf, seq)
 end
 
 local function init()
     _tree_buf = utils.new_buf()
     _auto_diff_buf = utils.new_buf()
+    _help_buf = utils.new_buf()
     if config.opts.diff_cur_node.enabled then
         api.nvim_set_option_value("syntax", "diff", { buf = _auto_diff_buf })
     end
@@ -45,14 +67,12 @@ local function init()
         buffer = _tree_buf,
         group = M.augroup,
         callback = function()
-            --  2 * (total - id) + 1 = line
-            local id_under_cursor = tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2
-            if id_under_cursor % 1 ~= 0 or not config.opts.diff_cur_node.enabled then
+            if seq_under_cursor() % 1 ~= 0 or not config.opts.diff_cur_node.enabled then
                 return
             end
             vim.schedule(function()
-                local before_ctx = diff.get_context(M.attach_buf, id_under_cursor - 1)
-                local cur_ctx = diff.get_context(M.attach_buf, id_under_cursor)
+                local before_ctx = get_context_at(seq_under_cursor() - 1)
+                local cur_ctx = get_context_at(seq_under_cursor())
                 local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
                 utils.set_text(_auto_diff_buf, diff_ctx)
             end)
@@ -72,19 +92,14 @@ local function init()
     utils.keymap("n", "q", M.close, { buffer = _tree_buf })
     utils.keymap("n", "q", M.close, { buffer = _auto_diff_buf })
     utils.keymap("n", "j", function()
-        local id_under_cursor = math.ceil(tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2)
-        set_cursor(id_under_cursor - vim.v.count1)
+        set_cursor(math.ceil(seq_under_cursor()) - vim.v.count1)
     end, { buffer = _tree_buf })
     utils.keymap("n", "k", function()
-        local id_under_cursor = math.floor(tree.total - (api.nvim_win_get_cursor(_tree_win)[1] - 1) / 2)
-        set_cursor(id_under_cursor + vim.v.count1)
+        set_cursor(math.floor(seq_under_cursor()) + vim.v.count1)
     end, { buffer = _tree_buf })
     utils.keymap("n", "<CR>", function()
-        local id_under_cursor = api.nvim_get_current_line():match("%[(%d+)%]")
-        if id_under_cursor then
-            undo_to(id_under_cursor)
-            M.refresh()
-        end
+        undo_to(seq_under_cursor())
+        M.refresh()
     end, { buffer = _tree_buf })
 end
 
@@ -141,22 +156,36 @@ function M.refresh()
         end
         utils.set_text(_tree_buf, buf_lines)
 
-        local cur_line = (tree.total - tree.cur_id) * 2 + 1
+        local cur_line
+        if tree.cur_seq == 0 then
+            cur_line = (tree.last_seq - tree.earliest_seq + 1) * 2 + 1
+        else
+            cur_line = (tree.last_seq - tree.cur_seq) * 2 + 1
+        end
         utils.color_char(
             _tree_buf,
             "AtoneCurrentNode",
             buf_lines[cur_line],
             cur_line,
-            tree.node_at(tree.cur_id).depth * 2 - 1 -- use node_at() because we maybe go to the original node
+            tree.node_at(tree.cur_seq).depth * 2 - 1 -- use node_at() because we maybe go to the original node
         )
 
-        local before_ctx = diff.get_context(M.attach_buf, tree.cur_id - 1)
-        local cur_ctx = diff.get_context(M.attach_buf, tree.cur_id)
+        local before_ctx = get_context_at(tree.cur_seq - 1)
+        local cur_ctx = get_context_at(tree.cur_seq)
         local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
         utils.set_text(_auto_diff_buf, diff_ctx)
 
-        set_cursor(tree.cur_id)
+        set_cursor(tree.cur_seq)
     end
+end
+
+function M.show_help()
+    _float_win = utils.new_win("float", _help_buf, {
+        relative = "editor",
+        zindex = 120,
+        style = "minimal",
+        border = config.opts.ui.border,
+    })
 end
 
 function M.close()
@@ -169,7 +198,7 @@ end
 
 function M.focus()
     if M._show then
-        set_cursor(tree.cur_id)
+        set_cursor(tree.cur_seq)
         api.nvim_set_current_win(_tree_win)
     end
 end
