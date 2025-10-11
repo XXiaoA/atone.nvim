@@ -7,6 +7,7 @@ function M.new_buf()
         filetype = "atone",
         buftype = "nofile",
         modifiable = false,
+        swapfile = false,
     }
     local buf = api.nvim_create_buf(false, true)
     for option, value in pairs(buf_opts) do
