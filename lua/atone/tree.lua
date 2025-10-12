@@ -80,18 +80,22 @@ function M.convert(buf)
     M.cur_seq = undotree.seq_cur
     M.last_seq = undotree.seq_last
 
-    local earliest_seq = undotree.entries[1].seq
-    local function flatten(rawtree, parent)
+    local earliest_seq = undotree.entries[1] and undotree.entries[1].seq or 1
+    local function flatten(rawtree, parent, depth)
         for _, raw_node in ipairs(rawtree) do
             ---@diagnostic disable-next-line: missing-fields
-            M.nodes[raw_node.seq] = {
+            local node = {
                 seq = raw_node.seq,
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
                 children = {},
+                depth = depth,
             }
+            M.nodes[raw_node.seq] = node
+            local parent_node = M.nodes[node.parent]
+            parent_node.children[#parent_node.children + 1] = raw_node.seq
             if raw_node.alt then
-                flatten(raw_node.alt, parent)
+                flatten(raw_node.alt, parent, depth + 1)
             end
             parent = raw_node.seq
             if raw_node.seq < earliest_seq then
@@ -99,45 +103,9 @@ function M.convert(buf)
             end
         end
     end
-    flatten(undotree.entries, 0)
-
     -- set the depth: the depth of each branch depth = the depth of its root node's parent node plus 1
     -- determine the main branch with a depth of 1
-    do
-        local seq = undotree.seq_last
-        repeat
-            local node = M.nodes[seq]
-            node.depth = 1
-            seq = node.parent
-        until seq == 0
-    end
-    -- fill in depths for other branches
-    for seq = M.last_seq - 1, earliest_seq, -1 do
-        if M.nodes[seq] and not M.nodes[seq].depth then
-            local path = {}
-            local sub_seq = seq
-            local sub_node = M.nodes[sub_seq]
-            repeat
-                path[#path + 1] = sub_seq
-                sub_seq = sub_node.parent
-                sub_node = M.nodes[sub_seq]
-            until sub_node.depth
-            for _, i in ipairs(path) do
-                M.nodes[i].depth = sub_node.depth + 1
-            end
-        end
-    end
-
-    for seq = M.last_seq, earliest_seq, -1 do
-        local node = M.nodes[seq]
-        if node then
-            local parent_node = M.nodes[node.parent]
-            parent_node.children[#parent_node.children + 1] = seq
-            if node.depth == parent_node.depth then
-                parent_node.child = seq
-            end
-        end
-    end
+    flatten(undotree.entries, 0, 1)
 
     -- adjust the depth
     for seq = M.last_seq, earliest_seq + 1, -1 do
