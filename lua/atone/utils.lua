@@ -38,6 +38,20 @@ function M.new_win(mode, buf, config, enter)
 
     if mode == "float" then
         win = api.nvim_open_win(buf, enter, config)
+        -- close float window after leaving it
+        local au
+        au = api.nvim_create_autocmd("WinLeave", {
+            callback = function()
+                if api.nvim_get_current_win() == win then
+                    pcall(vim.api.nvim_win_close, win, true)
+                    api.nvim_del_autocmd(au)
+                elseif not vim.api.nvim_win_is_valid(win) then
+                    api.nvim_del_autocmd(au)
+                end
+            end,
+            once = true,
+            nested = true,
+        })
     else
         local cur = api.nvim_get_current_win()
         vim.cmd(mode .. " +buffer" .. buf)
