@@ -261,7 +261,7 @@ function M.render()
         M.lines[node_line] = set_char_at(M.lines[node_line], node.depth * 2 - 1, "●")
 
         local diff_patch =
-            diff.get_diff(diff.get_context(node.bufnr, M.node_at(node.parent).seq), diff.get_context(node.bufnr, node.seq))
+            diff.get_diff(diff.get_context(node.bufnr, node.seq), diff.get_context(node.bufnr, M.node_at(node.parent).seq))
         local label = get_label(node, diff_patch)
 
         local col = M.max_depth * 2 + 4
