@@ -1,4 +1,8 @@
 local api, fn = vim.api, vim.fn
+
+local diff = require("atone.diff")
+
+local config = require("atone.config")
 local time_ago = require("atone.utils").time_ago
 
 --- get the character at column `col` (1-based index)
@@ -39,6 +43,16 @@ local M = {
     earliest_seq = 1, -- this value is not 1 when vim.o.undolevels < last_seq
 }
 
+---@class Atone.Tree.NoteCtx.Diff
+---@field added integer
+---@field removed integer
+
+---@class Atone.Tree.NoteCtx
+---@field seq integer
+---@field time integer
+---@field h_time string Time in a human-readable format
+---@field diff Atone.Tree.NoteCtx.Diff Diff statistics
+
 function M.node_at(seq)
     return seq < M.earliest_seq and M.root or M.nodes[seq]
 end
@@ -71,6 +85,7 @@ function M.convert(buf)
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
                 children = {},
+                bufnr = buf,
             }
             if raw_node.alt then
                 flatten(raw_node.alt, parent)
@@ -183,8 +198,31 @@ function M.render()
         M.lines[node_line + 1] = "│" -- line after this node
         M.lines[node_line] = "│"
         M.lines[node_line] = set_char_at(M.lines[node_line], node.depth * 2 - 1, "●")
-        M.lines[node_line] =
-            set_char_at(M.lines[node_line], M.max_depth * 2 + 4, "[" .. node.seq .. "] " .. time_ago(node.time))
+
+        local diff_patch =
+            diff.get_diff(diff.get_context(node.bufnr, M.node_at(node.parent).seq), diff.get_context(node.bufnr, node.seq))
+        M.lines[node_line] = set_char_at(
+            M.lines[node_line],
+            M.max_depth * 2 + 4,
+            config.opts.note_formatter({
+                seq = node.seq,
+                time = node.time,
+                h_time = time_ago(node.time),
+                diff = {
+                    added = #(vim.iter(diff_patch)
+                        :filter(function(line)
+                            return line:find("^+") ~= nil
+                        end)
+                        :totable()),
+                    removed = #(vim.iter(diff_patch)
+                        :filter(function(line)
+                            return line:find("^-") ~= nil
+                        end)
+                        :totable()),
+                },
+            })
+        )
+        -- set_char_at(M.lines[node_line], M.max_depth * 2 + 4, "[" .. node.seq .. "] " .. time_ago(node.time))
         if not node.fork and node.depth ~= 1 then
             local line_is_drawing = node_line + 1
             while
