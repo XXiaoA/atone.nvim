@@ -1,5 +1,5 @@
 local api, fn = vim.api, vim.fn
-
+local ns = api.nvim_create_namespace("atone.tree")
 local diff = require("atone.diff")
 
 local config = require("atone.config")
@@ -28,7 +28,7 @@ end
 
 ---@param node Atone.Tree.Node
 ---@param diff_patch string[]
----@return string
+---@return string|table[]
 local function get_label(node, diff_patch)
     ---@type Atone.Tree.Node.Label.Ctx.Diff
     local diff_stats = { added = 0, removed = 0 }
@@ -40,12 +40,25 @@ local function get_label(node, diff_patch)
         end
     end)
 
-    return config.opts.node_label_formatter({
+    local label = config.opts.node_label_formatter({
         seq = node.seq,
         time = node.time or 0,
         h_time = time_ago(node.time or 0),
         diff = diff_stats,
     })
+    if type(label) == "string" then
+        return label
+    else
+        return vim.iter(label)
+            :map(function(item)
+                if type(item) == "string" then
+                    return { item, "Normal" }
+                else
+                    return item
+                end
+            end)
+            :totable()
+    end
 end
 
 local M = {
@@ -113,6 +126,7 @@ function M.convert(buf)
     -- clear the tree.nodes!!!!
     M.nodes = {}
     M.root.bufnr = buf
+    M.root.time = os.time()
     local undotree = fn.undotree(buf)
     local function flatten(rawtree, parent)
         for _, raw_node in ipairs(rawtree) do
@@ -227,6 +241,8 @@ function M.render()
     -- |/       8  <- line after this node
     -- o    [0] 9
 
+    local core = require("atone.core")
+    local tree_buf = assert(core.get_tree_buf())
     for seq = M.earliest_seq, M.last_seq do
         local node = M.nodes[seq]
         local parent_depth = M.node_at(node.parent).depth
@@ -237,7 +253,20 @@ function M.render()
 
         local diff_patch =
             diff.get_diff(diff.get_context(node.bufnr, M.node_at(node.parent).seq), diff.get_context(node.bufnr, node.seq))
-        M.lines[node_line] = set_char_at(M.lines[node_line], M.max_depth * 2 + 4, get_label(node, diff_patch))
+        local label = get_label(node, diff_patch)
+
+        local col = M.max_depth * 2 + 4
+        if type(label) == "string" then
+            M.lines[node_line] = set_char_at(M.lines[node_line], col, label)
+        else
+            vim.schedule_wrap(api.nvim_buf_set_extmark)(
+                tree_buf,
+                ns,
+                node_line - 1,
+                0,
+                { virt_text = label, strict = false, virt_text_pos = "eol_right_align", priority = 10000 }
+            )
+        end
 
         if not node.fork and node.depth ~= 1 then
             local line_is_drawing = node_line + 1
@@ -286,9 +315,22 @@ function M.render()
             end
         end
     end
-    M.lines[(M.last_seq - M.earliest_seq + 1) * 2 + 1] = "●"
-        .. string.rep(" ", M.max_depth * 2 + 2)
-        .. get_label(M.root, {})
+
+    local root_label = get_label(M.root, {})
+
+    local root_line_nr = (M.last_seq - M.earliest_seq + 1) * 2 + 1
+    M.lines[root_line_nr] = "●" .. string.rep(" ", M.max_depth * 2 + 2)
+    if type(root_label) == "string" then
+        M.lines[root_line_nr] = M.lines[(M.last_seq - M.earliest_seq + 1) * 2 + 1] .. root_label
+    else
+        vim.schedule_wrap(api.nvim_buf_set_extmark)(
+            tree_buf,
+            ns,
+            root_line_nr - 1,
+            0,
+            { virt_text = root_label, strict = false, virt_text_pos = "eol_right_align", priority = 10000 }
+        )
+    end
 
     return M.lines
 end
