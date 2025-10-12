@@ -14,6 +14,8 @@ function M.get_context(buf, n)
     local result = {}
     local tmp_file = fn.stdpath("cache") .. "/atone-undo"
     local tmp_undo = tmp_file .. ".undo"
+    local ei = vim.o.eventignore
+    vim.o.eventignore = "all"
     local tmpbuf = fn.bufadd(tmp_file)
     vim.bo[tmpbuf].swapfile = false
     fn.writefile(api.nvim_buf_get_lines(buf, 0, -1, false), tmp_file)
@@ -21,8 +23,6 @@ function M.get_context(buf, n)
     api.nvim_buf_call(buf, function()
         vim.cmd("silent wundo! " .. tmp_undo)
     end)
-    local ei = vim.o.eventignore
-    vim.o.eventignore = "all"
     api.nvim_buf_call(tmpbuf, function()
         ---@diagnostic disable-next-line: param-type-mismatch
         pcall(vim.cmd, "silent rundo " .. tmp_undo)
