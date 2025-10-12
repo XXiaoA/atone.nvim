@@ -168,7 +168,9 @@ function M.refresh()
             tree.nodes[tree.cur_seq].depth * 2 - 1 -- use node_at() because we maybe go to the original node
         )
 
-        local before_ctx = diff.get_context_by_seq(M.attach_buf, tree.cur_seq - 1)
+        local pre_id = tree.seq_2id(tree.cur_seq) - 1
+        local pre_seq = tree.id_2seq(pre_id) or -1
+        local before_ctx = diff.get_context_by_seq(M.attach_buf, pre_seq)
         local cur_ctx = diff.get_context_by_seq(M.attach_buf, tree.cur_seq)
         local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
         utils.set_text(_auto_diff_buf, diff_ctx)
