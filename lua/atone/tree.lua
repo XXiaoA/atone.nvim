@@ -89,6 +89,7 @@ local M = {
 ---@field parent integer
 ---@field bufnr? integer The buffer number of the original buffer
 ---@field fork? boolean
+---@field extmark_id? integer
 
 ---@class Atone.Tree.Node.Label.Ctx.Diff
 ---@field added integer
@@ -228,8 +229,6 @@ function M.convert(buf)
     return M.nodes
 end
 
-local extmarks = {}
-
 function M.render()
     M.lines = {}
     -- we should reverse the table: put the node with greater id in the smaller index
@@ -245,12 +244,6 @@ function M.render()
 
     local core = require("atone.core")
     local tree_buf = assert(core.get_tree_buf())
-    if #extmarks > 0 then
-        vim.iter(extmarks):each(vim.schedule_wrap(function(ext_id)
-            api.nvim_buf_del_extmark(tree_buf, ns, ext_id)
-        end))
-        extmarks = {}
-    end
 
     for seq = M.earliest_seq, M.last_seq do
         local node = M.nodes[seq]
@@ -269,19 +262,15 @@ function M.render()
             M.lines[node_line] = set_char_at(M.lines[node_line], col, label)
         else
             vim.schedule(function()
-                table.insert(
-                    extmarks,
-                    api.nvim_buf_set_extmark(
-                        tree_buf,
-                        ns,
-                        node_line - 1,
-                        0,
-                        { virt_text = label, strict = false, virt_text_pos = "eol_right_align", priority = 10000 }
-                    )
-                )
+                node.extmark_id = api.nvim_buf_set_extmark(tree_buf, ns, node_line - 1, 0, {
+                    virt_text = label,
+                    strict = false,
+                    virt_text_pos = "eol_right_align",
+                    priority = 10000,
+                    id = node.extmark_id,
+                })
             end)
         end
-
         if not node.fork and node.depth ~= 1 then
             local line_is_drawing = node_line + 1
             while
@@ -331,23 +320,20 @@ function M.render()
     end
 
     local root_label = get_label(M.root, {})
-
     local root_line_nr = (M.last_seq - M.earliest_seq + 1) * 2 + 1
     M.lines[root_line_nr] = "●" .. string.rep(" ", M.max_depth * 2 + 2)
+
     if type(root_label) == "string" then
         M.lines[root_line_nr] = M.lines[(M.last_seq - M.earliest_seq + 1) * 2 + 1] .. root_label
     else
         vim.schedule(function()
-            table.insert(
-                extmarks,
-                api.nvim_buf_set_extmark(
-                    tree_buf,
-                    ns,
-                    root_line_nr - 1,
-                    0,
-                    { virt_text = root_label, strict = false, virt_text_pos = "eol_right_align", priority = 1000 }
-                )
-            )
+            M.root.extmark_id = api.nvim_buf_set_extmark(tree_buf, ns, root_line_nr - 1, 0, {
+                virt_text = root_label,
+                strict = false,
+                virt_text_pos = "eol_right_align",
+                priority = 1000,
+                id = M.root.extmark_id,
+            })
         end)
     end
 
