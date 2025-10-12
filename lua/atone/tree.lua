@@ -27,6 +27,7 @@ local function set_char_at(str, pos, ch)
 end
 
 local M = {
+    ---@type Atone.Tree.Node
     root = {
         seq = 0,
         depth = 1,
@@ -35,6 +36,7 @@ local M = {
         children = {},
         parent = 0,
     },
+    ---@type table<integer, Atone.Tree.Node>
     nodes = {}, -- map { id: node }
     lines = {},
     last_seq = 0,
@@ -42,6 +44,16 @@ local M = {
     cur_seq = 0,
     earliest_seq = 1, -- this value is not 1 when vim.o.undolevels < last_seq
 }
+
+---@class Atone.Tree.Node
+---@field seq integer
+---@field time? integer
+---@field depth? integer
+---@field child? integer
+---@field children Atone.Tree.Node[]
+---@field parent integer
+---@field bufnr? integer The buffer number of the original buffer
+---@field fork? boolean
 
 ---@class Atone.Tree.Node.Label.Ctx.Diff
 ---@field added integer
@@ -53,6 +65,7 @@ local M = {
 ---@field h_time string Time in a human-readable format
 ---@field diff Atone.Tree.Node.Label.Ctx.Diff Diff statistics
 
+---@return Atone.Tree.Node
 function M.node_at(seq)
     return seq < M.earliest_seq and M.root or M.nodes[seq]
 end
@@ -77,6 +90,7 @@ end
 function M.convert(buf)
     -- clear the tree.nodes!!!!
     M.nodes = {}
+    M.root.bufnr = buf
     local undotree = fn.undotree(buf)
     local function flatten(rawtree, parent)
         for _, raw_node in ipairs(rawtree) do
@@ -162,7 +176,7 @@ function M.convert(buf)
                     and (sub_node.parent ~= node.parent or seq > M.node_at(node.parent).child)
                 then
                     if sub_seq < sub_node_parent.child then
-                        sub_node.fork = 1
+                        sub_node.fork = true
                     end
                     M.change_branch_depth(sub_seq, sub_node.depth + 1)
                 end
