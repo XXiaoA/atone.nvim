@@ -43,15 +43,15 @@ local M = {
     earliest_seq = 1, -- this value is not 1 when vim.o.undolevels < last_seq
 }
 
----@class Atone.Tree.NoteCtx.Diff
+---@class Atone.Tree.Node.Label.Ctx.Diff
 ---@field added integer
 ---@field removed integer
 
----@class Atone.Tree.NoteCtx
+---@class Atone.Tree.Node.Label.Ctx
 ---@field seq integer
 ---@field time integer
 ---@field h_time string Time in a human-readable format
----@field diff Atone.Tree.NoteCtx.Diff Diff statistics
+---@field diff Atone.Tree.Node.Label.Ctx.Diff Diff statistics
 
 function M.node_at(seq)
     return seq < M.earliest_seq and M.root or M.nodes[seq]
@@ -204,7 +204,7 @@ function M.render()
         M.lines[node_line] = set_char_at(
             M.lines[node_line],
             M.max_depth * 2 + 4,
-            config.opts.note_formatter({
+            config.opts.node_label_formatter({
                 seq = node.seq,
                 time = node.time,
                 h_time = time_ago(node.time),
@@ -222,7 +222,7 @@ function M.render()
                 },
             })
         )
-        -- set_char_at(M.lines[node_line], M.max_depth * 2 + 4, "[" .. node.seq .. "] " .. time_ago(node.time))
+
         if not node.fork and node.depth ~= 1 then
             local line_is_drawing = node_line + 1
             while

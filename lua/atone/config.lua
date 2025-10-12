@@ -24,8 +24,8 @@ M.opts = {
         enabled = true,
         excluded_ft = { "oil" },
     },
-    ---@type (fun(ctx:Atone.Tree.NoteCtx):string)?
-    note_formatter = function(ctx)
+    ---@type (fun(ctx:Atone.Tree.Node.Label.Ctx):string)?
+    node_label_formatter = function(ctx)
         return string.format("[%d] %s", ctx.seq, ctx.h_time)
     end,
 }
