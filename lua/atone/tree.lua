@@ -26,6 +26,28 @@ local function set_char_at(str, pos, ch)
     end
 end
 
+---@param node Atone.Tree.Node
+---@param diff_patch string[]
+---@return string
+local function get_label(node, diff_patch)
+    ---@type Atone.Tree.Node.Label.Ctx.Diff
+    local diff_stats = { added = 0, removed = 0 }
+    vim.iter(diff_patch):each(function(line)
+        if line:find("^-") ~= nil then
+            diff_stats.added = diff_stats.added + 1
+        elseif line:find("^+") ~= nil then
+            diff_stats.removed = diff_stats.removed + 1
+        end
+    end)
+
+    return config.opts.node_label_formatter({
+        seq = node.seq,
+        time = node.time or 0,
+        h_time = time_ago(node.time or 0),
+        diff = diff_stats,
+    })
+end
+
 local M = {
     ---@type Atone.Tree.Node
     root = {
@@ -215,27 +237,7 @@ function M.render()
 
         local diff_patch =
             diff.get_diff(diff.get_context(node.bufnr, M.node_at(node.parent).seq), diff.get_context(node.bufnr, node.seq))
-        M.lines[node_line] = set_char_at(
-            M.lines[node_line],
-            M.max_depth * 2 + 4,
-            config.opts.node_label_formatter({
-                seq = node.seq,
-                time = node.time,
-                h_time = time_ago(node.time),
-                diff = {
-                    added = #(vim.iter(diff_patch)
-                        :filter(function(line)
-                            return line:find("^+") ~= nil
-                        end)
-                        :totable()),
-                    removed = #(vim.iter(diff_patch)
-                        :filter(function(line)
-                            return line:find("^-") ~= nil
-                        end)
-                        :totable()),
-                },
-            })
-        )
+        M.lines[node_line] = set_char_at(M.lines[node_line], M.max_depth * 2 + 4, get_label(node, diff_patch))
 
         if not node.fork and node.depth ~= 1 then
             local line_is_drawing = node_line + 1
@@ -284,7 +286,9 @@ function M.render()
             end
         end
     end
-    M.lines[(M.last_seq - M.earliest_seq + 1) * 2 + 1] = "●" .. string.rep(" ", M.max_depth * 2 + 2) .. "[0] Original"
+    M.lines[(M.last_seq - M.earliest_seq + 1) * 2 + 1] = "●"
+        .. string.rep(" ", M.max_depth * 2 + 2)
+        .. get_label(M.root, {})
 
     return M.lines
 end
