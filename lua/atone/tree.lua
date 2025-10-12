@@ -228,6 +228,8 @@ function M.convert(buf)
     return M.nodes
 end
 
+local extmarks = {}
+
 function M.render()
     M.lines = {}
     -- we should reverse the table: put the node with greater id in the smaller index
@@ -243,6 +245,13 @@ function M.render()
 
     local core = require("atone.core")
     local tree_buf = assert(core.get_tree_buf())
+    if #extmarks > 0 then
+        vim.iter(extmarks):each(vim.schedule_wrap(function(ext_id)
+            api.nvim_buf_del_extmark(tree_buf, ns, ext_id)
+        end))
+        extmarks = {}
+    end
+
     for seq = M.earliest_seq, M.last_seq do
         local node = M.nodes[seq]
         local parent_depth = M.node_at(node.parent).depth
@@ -259,13 +268,18 @@ function M.render()
         if type(label) == "string" then
             M.lines[node_line] = set_char_at(M.lines[node_line], col, label)
         else
-            vim.schedule_wrap(api.nvim_buf_set_extmark)(
-                tree_buf,
-                ns,
-                node_line - 1,
-                0,
-                { virt_text = label, strict = false, virt_text_pos = "eol_right_align", priority = 10000 }
-            )
+            vim.schedule(function()
+                table.insert(
+                    extmarks,
+                    api.nvim_buf_set_extmark(
+                        tree_buf,
+                        ns,
+                        node_line - 1,
+                        0,
+                        { virt_text = label, strict = false, virt_text_pos = "eol_right_align", priority = 10000 }
+                    )
+                )
+            end)
         end
 
         if not node.fork and node.depth ~= 1 then
@@ -323,13 +337,18 @@ function M.render()
     if type(root_label) == "string" then
         M.lines[root_line_nr] = M.lines[(M.last_seq - M.earliest_seq + 1) * 2 + 1] .. root_label
     else
-        vim.schedule_wrap(api.nvim_buf_set_extmark)(
-            tree_buf,
-            ns,
-            root_line_nr - 1,
-            0,
-            { virt_text = root_label, strict = false, virt_text_pos = "eol_right_align", priority = 10000 }
-        )
+        vim.schedule(function()
+            table.insert(
+                extmarks,
+                api.nvim_buf_set_extmark(
+                    tree_buf,
+                    ns,
+                    root_line_nr - 1,
+                    0,
+                    { virt_text = root_label, strict = false, virt_text_pos = "eol_right_align", priority = 1000 }
+                )
+            )
+        end)
     end
 
     return M.lines
