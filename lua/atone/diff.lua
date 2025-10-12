@@ -4,10 +4,10 @@ local M = {}
 --- get the buffer context in nth undo node
 --- refer to https://github.com/folke/snacks.nvim/blob/da230e3ca8146da4b73752daaf0a1d07d343c12d/lua/snacks/picker/source/vim.lua#L324
 ---@param buf integer
----@param n integer
+---@param seq integer
 ---@return string[]
-function M.get_context(buf, n)
-    if n < 0 then
+function M.get_context_by_seq(buf, seq)
+    if seq < 0 then
         return {}
     end
 
@@ -26,7 +26,7 @@ function M.get_context(buf, n)
     api.nvim_buf_call(tmpbuf, function()
         ---@diagnostic disable-next-line: param-type-mismatch
         pcall(vim.cmd, "silent rundo " .. tmp_undo)
-        vim.cmd("noautocmd silent undo " .. n)
+        vim.cmd("noautocmd silent undo " .. seq)
         result = api.nvim_buf_get_lines(tmpbuf, 0, -1, false)
     end)
     vim.o.eventignore = ei
