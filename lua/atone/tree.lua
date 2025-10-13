@@ -339,7 +339,7 @@ function M.render()
     assert(type(tree_buf) == "number", "Unable to find the tree buffer.")
     do
         for i = 1, total do
-            local lnum = (total - i) * 2
+            local lnum = (total - i) * 2 + 1
             local seq = M.id_2seq(i)
             local node = M.nodes[seq]
 
@@ -352,9 +352,9 @@ function M.render()
                 node.extmark_id = api.nvim_buf_set_extmark(
                     tree_buf,
                     ns,
-                    lnum,
-                    0,
-                    { virt_text = label, strict = false, virt_text_pos = "eol_right_align", id = node.extmark_id }
+                    lnum - 1,
+                    (M.lines[lnum]:len()) - 1,
+                    { virt_text = label, strict = false, virt_text_pos = "eol", id = node.extmark_id }
                 )
             end)
         end
