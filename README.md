@@ -51,22 +51,28 @@ require("atone").setup({
         enabled = true,
         excluded_ft = { "oil" },
     },
-    ---@type (fun(ctx:AtoneNode.Label.Ctx):string|({[1]: any, [2]: string}|string)[])?
-    node_label_formatter = function(ctx)
-        -- possible return types:
-        --   - a string as the label
-        --   - a list where each item is either a string or a tuple <text, hl_group>.
-        return {
-            { "[", "AtoneIDBracket" },
-            { ctx.seq, "AtoneID" },
-            { "] ", "AtoneIDBracket" },
-            { ctx.h_time, "Comment" },
-            " ",
-            { ctx.diff.added, "DiffAdded" },
-            " ",
-            { ctx.diff.removed, "DiffRemoved" },
-        }
-    end,
+    node_label = {
+        ---@type vim.api.keyset.set_extmark
+        extmark_opts = {
+            strict = false,
+        },
+        ---@type (fun(ctx:AtoneNode.Label.Ctx):string|({[1]: any, [2]: string}|string)[])?
+        formatter = function(ctx)
+            -- possible return types:
+            --   - a string as the label
+            --   - a list where each item is either a string or a tuple <text, hl_group>.
+            return {
+                { "[", "AtoneIDBracket" },
+                { ctx.seq, "AtoneID" },
+                { "] ", "AtoneIDBracket" },
+                { ctx.h_time, "Comment" },
+                " ",
+                { ctx.diff.added, "DiffAdded" },
+                " ",
+                { ctx.diff.removed, "DiffRemoved" },
+            }
+        end,
+    },
 })
 ```
 

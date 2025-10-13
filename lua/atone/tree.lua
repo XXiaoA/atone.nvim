@@ -56,7 +56,7 @@ local function get_label(node, diff_patch)
     else
         h_time = "Original"
     end
-    local label = config.opts.node_label_formatter({
+    local label = config.opts.node_label.formatter({
         seq = node.seq,
         time = node.time or 0,
         h_time = h_time,
@@ -354,7 +354,10 @@ function M.render()
                     ns,
                     lnum - 1,
                     (M.lines[lnum]:len()) - 1,
-                    { virt_text = label, strict = false, virt_text_pos = "eol", id = node.extmark_id }
+                    vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts, {
+                        virt_text = label,
+                        id = node.extmark_id,
+                    })
                 )
             end)
         end

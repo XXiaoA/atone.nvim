@@ -24,19 +24,25 @@ M.opts = {
         enabled = true,
         excluded_ft = { "oil" },
     },
-    ---@type (fun(ctx:AtoneNode.Label.Ctx):string|{[1]: any, [2]: string}[])?
-    node_label_formatter = function(ctx)
-        return {
-            { "[", "AtoneIDBracket" },
-            { ctx.seq, "AtoneID" },
-            { "] ", "AtoneIDBracket" },
-            { ctx.h_time, "Comment" },
-            " ",
-            { ctx.diff.added, "DiffAdded" },
-            " ",
-            { ctx.diff.removed, "DiffRemoved" },
-        }
-    end,
+    node_label = {
+        ---@type vim.api.keyset.set_extmark?
+        extmark_opts = {
+            strict = false,
+        },
+        ---@type (fun(ctx:AtoneNode.Label.Ctx):string|{[1]: any, [2]: string}[])?
+        formatter = function(ctx)
+            return {
+                { "[", "AtoneIDBracket" },
+                { ctx.seq, "AtoneID" },
+                { "] ", "AtoneIDBracket" },
+                { ctx.h_time, "Comment" },
+                " ",
+                { ctx.diff.added, "DiffAdded" },
+                " ",
+                { ctx.diff.removed, "DiffRemoved" },
+            }
+        end,
+    },
 }
 
 function M.merge_config(user_opts)
