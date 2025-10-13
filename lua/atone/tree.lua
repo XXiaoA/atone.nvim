@@ -94,6 +94,9 @@ function M.convert(buf)
             M.nodes[raw_node.seq] = node
             local parent_node = M.nodes[node.parent]
             parent_node.children[#parent_node.children + 1] = raw_node.seq
+            if node.depth == parent_node.depth then
+                parent_node.child = raw_node.seq
+            end
             if raw_node.alt then
                 flatten(raw_node.alt, parent, depth + 1)
             end
