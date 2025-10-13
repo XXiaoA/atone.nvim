@@ -141,6 +141,10 @@ function M.convert(buf)
     M.cur_seq = undotree.seq_cur
     M.last_seq = undotree.seq_last
 
+    if undotree.entries[1] == nil then
+        return
+    end
+
     local earliest_seq = undotree.entries[1].seq
     local function flatten(rawtree, parent)
         for _, raw_node in ipairs(rawtree) do
