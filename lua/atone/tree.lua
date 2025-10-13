@@ -79,6 +79,9 @@ function M.convert(buf)
     }
     M.cur_seq = undotree.seq_cur
     M.last_seq = undotree.seq_last
+    if M.last_seq == 0 then
+        return M.nodes
+    end
 
     local earliest_seq = undotree.entries[1].seq
     local function flatten(rawtree, parent)
