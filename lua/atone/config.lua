@@ -24,9 +24,18 @@ M.opts = {
         enabled = true,
         excluded_ft = { "oil" },
     },
-    ---@type (fun(ctx:Atone.Tree.Node.Label.Ctx):string)?
+    ---@type (fun(ctx:AtoneNode.Label.Ctx):string|{[1]: any, [2]: string}[])?
     node_label_formatter = function(ctx)
-        return string.format("[%d] %s", ctx.seq, ctx.h_time)
+        return {
+            { "[", "AtoneIDBracket" },
+            { tostring(ctx.seq), "AtoneID" },
+            { "] ", "AtoneIDBracket" },
+            { ctx.h_time, "Comment" },
+            " ",
+            { tostring(ctx.diff.added), "DiffAdded" },
+            " ",
+            { tostring(ctx.diff.removed), "DiffRemoved" },
+        }
     end,
 }
 

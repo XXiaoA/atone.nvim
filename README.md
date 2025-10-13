@@ -51,9 +51,37 @@ require("atone").setup({
         enabled = true,
         excluded_ft = { "oil" },
     },
+    ---@type (fun(ctx:AtoneNode.Label.Ctx):string|({[1]: any, [2]: string}|string)[])?
+    node_label_formatter = function(ctx)
+        -- possible return types:
+        --   - a string as the label
+        --   - a list where each item is either a string or a tuple <text, hl_group>.
+        return {
+            { "[", "AtoneIDBracket" },
+            { tostring(ctx.seq), "AtoneID" },
+            { "] ", "AtoneIDBracket" },
+            { ctx.h_time, "Comment" },
+            " ",
+            { tostring(ctx.diff.added), "DiffAdded" },
+            " ",
+            { tostring(ctx.diff.removed), "DiffRemoved" },
+        }
+    end,
 })
 ```
 
+The `ctx` parameter of the `node_label_formatter` function is defined as follows:
+```lua 
+---@class AtoneNode.Label.Ctx.Diff
+---@field added integer
+---@field removed integer
+
+---@class AtoneNode.Label.Ctx
+---@field seq integer
+---@field time integer
+---@field h_time string Time in a human-readable format
+---@field diff AtoneNode.Label.Ctx.Diff Diff statistics
+```
 
 ## Highlight
 

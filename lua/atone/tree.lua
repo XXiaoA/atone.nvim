@@ -26,21 +26,21 @@ local function set_char_at(str, pos, ch)
     end
 end
 
----@class Atone.Tree.Node.Label.Ctx.Diff
+---@class AtoneNode.Label.Ctx.Diff
 ---@field added integer
 ---@field removed integer
 
----@class Atone.Tree.Node.Label.Ctx
+---@class AtoneNode.Label.Ctx
 ---@field seq integer
 ---@field time integer
 ---@field h_time string Time in a human-readable format
----@field diff Atone.Tree.Node.Label.Ctx.Diff Diff statistics
+---@field diff AtoneNode.Label.Ctx.Diff Diff statistics
 
 ---@param node AtoneNode
 ---@param diff_patch string[]
----@return table[]
+---@return {[1]: string, [2]: string}[]
 local function get_label(node, diff_patch)
-    ---@type Atone.Tree.Node.Label.Ctx.Diff
+    ---@type AtoneNode.Label.Ctx.Diff
     local diff_stats = { added = 0, removed = 0 }
     vim.iter(diff_patch):each(function(line)
         if line:find("^-") ~= nil then
@@ -70,7 +70,7 @@ local function get_label(node, diff_patch)
                 if type(item) == "string" then
                     return { item, "Normal" }
                 else
-                    return item
+                    return { tostring(item[1]), item[2] or "Normal" }
                 end
             end)
             :totable()
