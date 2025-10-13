@@ -28,13 +28,13 @@ M.opts = {
     node_label_formatter = function(ctx)
         return {
             { "[", "AtoneIDBracket" },
-            { tostring(ctx.seq), "AtoneID" },
+            { ctx.seq, "AtoneID" },
             { "] ", "AtoneIDBracket" },
             { ctx.h_time, "Comment" },
             " ",
-            { tostring(ctx.diff.added), "DiffAdded" },
+            { ctx.diff.added, "DiffAdded" },
             " ",
-            { tostring(ctx.diff.removed), "DiffRemoved" },
+            { ctx.diff.removed, "DiffRemoved" },
         }
     end,
 }
