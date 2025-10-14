@@ -53,6 +53,25 @@ local function seq_under_cursor()
     return tree.id_2seq(id)
 end
 
+local mappings = {
+    quit = function()
+        M.close()
+    end,
+    next_node = function()
+        pos_cursor_by_id(math.ceil(id_under_cursor()) - vim.v.count1)
+    end, -- support v:count
+    pre_node = function()
+        pos_cursor_by_id(math.floor(id_under_cursor()) + vim.v.count1)
+    end, -- support v:count
+    undo_to = function()
+        local seq = seq_under_cursor()
+        if seq then
+            undo_to(seq)
+            M.refresh()
+        end
+    end,
+}
+
 local function init()
     _tree_buf = utils.new_buf()
     _auto_diff_buf = utils.new_buf()
@@ -88,21 +107,13 @@ local function init()
         callback = M.close,
     })
 
-    utils.keymap("n", "q", M.close, { buffer = _tree_buf })
-    utils.keymap("n", "q", M.close, { buffer = _auto_diff_buf })
-    utils.keymap("n", "j", function()
-        pos_cursor_by_id(math.ceil(id_under_cursor()) - vim.v.count1)
-    end, { buffer = _tree_buf })
-    utils.keymap("n", "k", function()
-        pos_cursor_by_id(math.floor(id_under_cursor()) + vim.v.count1)
-    end, { buffer = _tree_buf })
-    utils.keymap("n", "<CR>", function()
-        local seq = seq_under_cursor()
-        if seq then
-            undo_to(seq)
-            M.refresh()
-        end
-    end, { buffer = _tree_buf })
+    local keymaps_conf = config.opts.keymaps
+    for action, lhs in pairs(keymaps_conf.tree) do
+        utils.keymap("n", lhs, mappings[action], { buffer = _tree_buf })
+    end
+    for action, lhs in pairs(keymaps_conf.auto_diff) do
+        utils.keymap("n", lhs, mappings[action], { buffer = _auto_diff_buf })
+    end
 end
 
 local function check()
