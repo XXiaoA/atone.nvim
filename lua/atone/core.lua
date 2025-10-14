@@ -187,7 +187,7 @@ end
 
 function M.focus()
     if M._show then
-        pos_cursor_by_id(tree.cur_seq)
+        pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
         api.nvim_set_current_win(_tree_win)
     end
 end
