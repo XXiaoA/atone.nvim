@@ -76,7 +76,7 @@ require("atone").setup({
 })
 ```
 
-The `ctx` parameter of the `node_label_formatter` function is defined as follows:
+The `ctx` parameter of the `node_label.formatter` function is defined as follows:
 ```lua 
 ---@class AtoneNode.Label.Ctx.Diff
 ---@field added integer

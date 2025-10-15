@@ -37,21 +37,28 @@ end
 ---@field diff AtoneNode.Label.Ctx.Diff Diff statistics
 
 ---@param node AtoneNode
----@param diff_patch string[]
 ---@return {[1]: string, [2]: string}[]
-local function get_label(node, diff_patch)
-    ---@type AtoneNode.Label.Ctx.Diff
-    local diff_stats = { added = 0, removed = 0 }
-    vim.iter(diff_patch):each(function(line)
-        if line:find("^-") ~= nil then
-            diff_stats.added = diff_stats.added + 1
-        elseif line:find("^+") ~= nil then
-            diff_stats.removed = diff_stats.removed + 1
-        end
-    end)
+local function get_label(node)
+    if node.diff_stats_from_parent == nil then
+        -- cache the diff stats
+        local diff_patch = diff.get_diff(
+            diff.get_context_by_seq(node.bufnr, node.seq),
+            diff.get_context_by_seq(node.bufnr, node.parent or 0)
+        )
+        ---@type AtoneNode.Label.Ctx.Diff
+        local diff_stats = { added = 0, removed = 0 }
+        vim.iter(diff_patch):each(function(line)
+            if line:find("^-") ~= nil then
+                diff_stats.added = diff_stats.added + 1
+            elseif line:find("^+") ~= nil then
+                diff_stats.removed = diff_stats.removed + 1
+            end
+        end)
+        node.diff_stats_from_parent = diff_stats
+    end
 
     local h_time
-    if node.seq > 0 then
+    if node.seq > 0 and node.time ~= nil then
         h_time = time_ago(node.time)
     else
         h_time = "Original"
@@ -60,7 +67,7 @@ local function get_label(node, diff_patch)
         seq = node.seq,
         time = node.time or 0,
         h_time = h_time,
-        diff = diff_stats,
+        diff = node.diff_stats_from_parent,
     })
     if type(label) == "string" then
         return { { label, "Normal" } }
@@ -79,18 +86,20 @@ end
 
 ---@class AtoneNode
 ---@field seq integer
----@field time integer
+---@field time? integer
 ---@field depth? integer
----@field parent integer
+---@field parent? integer
 ---@field children integer[]
 ---@field child? integer
 ---@field fork boolean?
 ---@field bufnr? integer
 ---@field extmark_id? integer
+---@field diff_stats_from_parent? AtoneNode.Label.Ctx.Diff
 
 local M = {
-    ---@type AtoneNode[]
-    nodes = {}, -- { seq: node }
+    --- { seq: node }
+    ---@type table<integer, AtoneNode>
+    nodes = {},
     lines = {},
     total = 1,
     last_seq = 0,
@@ -136,7 +145,6 @@ function M.convert(buf)
         child = nil,
         children = {},
         bufnr = buf,
-        time = os.time(),
     }
     M.cur_seq = undotree.seq_cur
     M.last_seq = undotree.seq_last
@@ -151,13 +159,14 @@ function M.convert(buf)
     local earliest_seq = undotree.entries[1].seq
     local function flatten(rawtree, parent)
         for _, raw_node in ipairs(rawtree) do
-            M.nodes[raw_node.seq] = {
+            M.nodes[raw_node.seq] = vim.tbl_deep_extend("force", M.nodes[raw_node.seq] or {}, {
                 seq = raw_node.seq,
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
                 children = {},
                 bufnr = buf,
-            }
+            })
+
             if raw_node.alt then
                 flatten(raw_node.alt, parent)
             end
@@ -340,29 +349,30 @@ function M.render()
 
     local tree_buf = require("atone.core").get_tree_buf()
     assert(type(tree_buf) == "number", "Unable to find the tree buffer.")
+
     do
         for i = 1, total do
             local lnum = (total - i) * 2 + 1
+
             local seq = M.id_2seq(i)
             local node = M.nodes[seq]
 
-            local diff_patch = diff.get_diff(
-                diff.get_context_by_seq(node.bufnr, node.seq),
-                diff.get_context_by_seq(node.bufnr, node.parent or 0)
-            )
-            local label = get_label(node, diff_patch)
-            vim.schedule(function()
-                node.extmark_id = api.nvim_buf_set_extmark(
-                    tree_buf,
-                    ns,
-                    lnum - 1,
-                    (M.lines[lnum]:len()) - 1,
-                    vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts, {
-                        virt_text = label,
-                        id = node.extmark_id,
-                    })
-                )
-            end)
+            local label = get_label(node)
+
+            if label ~= nil then
+                vim.schedule(function()
+                    node.extmark_id = api.nvim_buf_set_extmark(
+                        tree_buf,
+                        ns,
+                        lnum - 1,
+                        (M.lines[lnum]:len()) - 1,
+                        vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
+                            virt_text = label,
+                            id = node.extmark_id,
+                        })
+                    )
+                end)
+            end
         end
     end
 
