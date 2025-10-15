@@ -154,9 +154,9 @@ local function check()
         return true
     end
     M.close()
-    pcall(api.nvim_buf_delete, _tree_buf, false)
-    pcall(api.nvim_buf_delete, _auto_diff_buf, false)
-    pcall(api.nvim_buf_delete, _help_buf, false)
+    pcall(api.nvim_buf_delete, _tree_buf, { force = false })
+    pcall(api.nvim_buf_delete, _auto_diff_buf, { force = false })
+    pcall(api.nvim_buf_delete, _help_buf, { force = false })
 end
 
 function M.open()
