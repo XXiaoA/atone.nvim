@@ -53,9 +53,54 @@ local function seq_under_cursor()
     return tree.id_2seq(id)
 end
 
+local used_mappings = {}
+local mappings = {
+    quit = {
+        function()
+            M.close()
+        end,
+        "Close all atone windows",
+    },
+    quit_help = {
+        function()
+            pcall(api.nvim_win_close, _float_win, true)
+        end,
+        "Close help window",
+    },
+    next_node = {
+        function()
+            pos_cursor_by_id(math.ceil(id_under_cursor()) - vim.v.count1)
+        end,
+        "Jump to next node (v:count supported)",
+    }, -- support v:count
+    pre_node = {
+        function()
+            pos_cursor_by_id(math.floor(id_under_cursor()) + vim.v.count1)
+        end,
+        "Jump to previous node (v:count supported)",
+    }, -- support v:count
+    undo_to = {
+        function()
+            local seq = seq_under_cursor()
+            if seq then
+                undo_to(seq)
+                M.refresh()
+            end
+        end,
+        "Undo to the node under cursor",
+    },
+    help = {
+        function()
+            M.show_help()
+        end,
+        "Show help page",
+    },
+}
+
 local function init()
     _tree_buf = utils.new_buf()
     _auto_diff_buf = utils.new_buf()
+    _help_buf = utils.new_buf()
     if config.opts.diff_cur_node.enabled then
         api.nvim_set_option_value("syntax", "diff", { buf = _auto_diff_buf })
     end
@@ -88,30 +133,30 @@ local function init()
         callback = M.close,
     })
 
-    utils.keymap("n", "q", M.close, { buffer = _tree_buf })
-    utils.keymap("n", "q", M.close, { buffer = _auto_diff_buf })
-    utils.keymap("n", "j", function()
-        pos_cursor_by_id(math.ceil(id_under_cursor()) - vim.v.count1)
-    end, { buffer = _tree_buf })
-    utils.keymap("n", "k", function()
-        pos_cursor_by_id(math.floor(id_under_cursor()) + vim.v.count1)
-    end, { buffer = _tree_buf })
-    utils.keymap("n", "<CR>", function()
-        local seq = seq_under_cursor()
-        if seq then
-            undo_to(seq)
-            M.refresh()
-        end
-    end, { buffer = _tree_buf })
+    -- register keymaps
+    local keymaps_conf = config.opts.keymaps
+    for action, lhs in pairs(keymaps_conf.tree) do
+        utils.keymap("n", lhs, mappings[action][1], { buffer = _tree_buf })
+        used_mappings[action] = { lhs, mappings[action][2] }
+    end
+    for action, lhs in pairs(keymaps_conf.auto_diff) do
+        utils.keymap("n", lhs, mappings[action][1], { buffer = _auto_diff_buf })
+        used_mappings[action] = { lhs, mappings[action][2] }
+    end
+    for action, lhs in pairs(keymaps_conf.help) do
+        utils.keymap("n", lhs, mappings[action][1], { buffer = _help_buf })
+        used_mappings[action] = { lhs, mappings[action][2] }
+    end
 end
 
 local function check()
-    if api.nvim_buf_is_valid(_auto_diff_buf) and api.nvim_buf_is_valid(_tree_buf) then
+    if api.nvim_buf_is_valid(_auto_diff_buf) and api.nvim_buf_is_valid(_tree_buf) and api.nvim_buf_is_valid(_help_buf) then
         return true
     end
     M.close()
-    pcall(api.nvim_buf_delete, _tree_buf, false)
-    pcall(api.nvim_buf_delete, _auto_diff_buf, false)
+    pcall(api.nvim_buf_delete, _tree_buf, { force = false })
+    pcall(api.nvim_buf_delete, _auto_diff_buf, { force = false })
+    pcall(api.nvim_buf_delete, _help_buf, { force = false })
 end
 
 function M.open()
@@ -173,17 +218,52 @@ function M.refresh()
     end
 end
 
+function M.show_help()
+    -- set context for help buffer
+    local help_lines = {}
+    local max_lhs = 0
+    local max_line = 0
+    for _, v in pairs(used_mappings) do
+        local lhs = v[1]
+        local desc = v[2]
+        if type(lhs) == "table" then
+            lhs = table.concat(lhs, "/")
+        end
+        max_lhs = math.max(max_lhs, vim.api.nvim_strwidth(lhs))
+        max_line = math.max(max_line, #lhs + #desc)
+        help_lines[#help_lines + 1] = lhs .. "\t" .. desc
+    end
+    max_line = max_line + max_lhs + 4
+    api.nvim_set_option_value("vartabstop", tostring(max_lhs + 4), { buf = _help_buf })
+    utils.set_text(_help_buf, help_lines)
+
+    -- open help window
+    local editor_columns = api.nvim_get_option_value("columns", {})
+    local editor_lines = api.nvim_get_option_value("lines", {})
+    _float_win = utils.new_win("float", _help_buf, {
+        relative = "editor",
+        row = math.max(0, (editor_lines - #help_lines) / 2),
+        col = math.max(0, (editor_columns - max_line - 1) / 2),
+        width = math.min(editor_columns, max_line + 1),
+        height = math.min(editor_lines, #help_lines),
+        zindex = 150,
+        style = "minimal",
+        border = config.opts.ui.border,
+    })
+end
+
 function M.close()
     if M._show then
         M._show = false
         pcall(api.nvim_win_close, _tree_win, true)
         pcall(api.nvim_win_close, _diff_win, true)
+        pcall(api.nvim_win_close, _float_win, true)
     end
 end
 
 function M.focus()
     if M._show then
-        pos_cursor_by_id(tree.cur_seq)
+        pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
         api.nvim_set_current_win(_tree_win)
     end
 end

@@ -24,6 +24,22 @@ M.opts = {
         enabled = true,
         excluded_ft = { "oil" },
     },
+    keymaps = {
+        tree = {
+            quit = { "<C-c>", "q" },
+            next_node = "j", -- support v:count
+            pre_node = "k", -- support v:count
+            undo_to = "<CR>",
+            help = { "?", "g?" },
+        },
+        auto_diff = {
+            quit = { "<C-c>", "q" },
+            help = { "?", "g?" },
+        },
+        help = {
+            quit_help = { "<C-c>", "q" },
+        },
+    },
     node_label = {
         ---@type vim.api.keyset.set_extmark?
         extmark_opts = {
@@ -42,6 +58,10 @@ M.opts = {
                 { ctx.diff.removed, "DiffRemoved" },
             }
         end,
+    },
+    ui = {
+        -- refer to `:h 'winborder'`
+        border = "single",
     },
 }
 
