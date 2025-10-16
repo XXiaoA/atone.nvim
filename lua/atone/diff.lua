@@ -1,4 +1,4 @@
-local api, fn = vim.api, vim.fn
+local api = vim.api
 local M = {}
 
 --- get the buffer context in nth undo node
@@ -11,26 +11,27 @@ function M.get_context_by_seq(buf, seq)
         return {}
     end
 
+    -- the tmp file where the undo history is saved
+    local tmp_undo_file = os.tmpname()
     local result = {}
-    local tmp_file = fn.stdpath("cache") .. "/atone-undo"
-    local tmp_undo = tmp_file .. ".undo"
+
     local ei = vim.o.eventignore
     vim.o.eventignore = "all"
-    local tmpbuf = fn.bufadd(tmp_file)
+    local tmpbuf = api.nvim_create_buf(false, true)
     vim.bo[tmpbuf].swapfile = false
-    fn.writefile(api.nvim_buf_get_lines(buf, 0, -1, false), tmp_file)
-    fn.bufload(tmpbuf)
+    api.nvim_buf_set_lines(tmpbuf, 0, -1, false, api.nvim_buf_get_lines(buf, 0, -1, false))
     api.nvim_buf_call(buf, function()
-        vim.cmd("silent wundo! " .. tmp_undo)
+        vim.cmd("silent wundo! " .. tmp_undo_file)
     end)
     api.nvim_buf_call(tmpbuf, function()
         ---@diagnostic disable-next-line: param-type-mismatch
-        pcall(vim.cmd, "silent rundo " .. tmp_undo)
+        pcall(vim.cmd, "silent rundo " .. tmp_undo_file)
         vim.cmd("noautocmd silent undo " .. seq)
         result = api.nvim_buf_get_lines(tmpbuf, 0, -1, false)
     end)
     vim.o.eventignore = ei
     vim.api.nvim_buf_delete(tmpbuf, { force = true })
+    os.remove(tmp_undo_file)
     return result
 end
 
