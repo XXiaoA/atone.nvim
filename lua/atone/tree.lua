@@ -93,7 +93,6 @@ end
 ---@field child? integer
 ---@field fork boolean?
 ---@field bufnr? integer
----@field extmark_id? integer
 ---@field diff_stats_from_parent? AtoneNode.Label.Ctx.Diff
 
 local M = {
@@ -104,8 +103,9 @@ local M = {
     total = 1,
     last_seq = 0,
     cur_seq = 0,
-    ---@type integer?
-    tree_buf = nil,
+    --- {buf: {seq: extmark_id} }
+    ---@type table<integer, table<integer, integer >>
+    extmark_ids = {},
 }
 
 local seqs -- { id: seq }
@@ -138,6 +138,17 @@ function M.convert(buf)
 
     -- initiate
     M.nodes = {}
+    M.extmark_ids[buf] = M.extmark_ids[buf] or {}
+    if M.nodes[0] and M.nodes[0].bufnr ~= buf then
+        local prev_buf = M.nodes[0].bufnr
+        local tree_buf = require("atone.core").get_tree_buf()
+        if tree_buf then
+            vim.iter(M.extmark_ids[prev_buf]):each(vim.schedule_wrap(function(k, v)
+                api.nvim_buf_del_extmark(tree_buf, ns, v)
+            end))
+        end
+    end
+
     M.nodes[0] = {
         seq = 0,
         depth = 1,
@@ -361,14 +372,14 @@ function M.render()
 
             if label ~= nil then
                 vim.schedule(function()
-                    node.extmark_id = api.nvim_buf_set_extmark(
+                    M.extmark_ids[node.bufnr][node.seq] = api.nvim_buf_set_extmark(
                         tree_buf,
                         ns,
                         lnum - 1,
                         (M.lines[lnum]:len()) - 1,
                         vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
                             virt_text = label,
-                            id = node.extmark_id,
+                            id = M.extmark_ids[node.bufnr][node.seq],
                         })
                     )
                 end)
