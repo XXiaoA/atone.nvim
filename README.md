@@ -61,16 +61,7 @@ require("atone").setup({
             -- possible return types:
             --   - a string as the label
             --   - a list where each item is either a string or a tuple <text, hl_group>.
-            return {
-                { "[", "AtoneIDBracket" },
-                { ctx.seq, "AtoneID" },
-                { "] ", "AtoneIDBracket" },
-                { ctx.h_time, "Comment" },
-                " ",
-                { ctx.diff.added, "DiffAdded" },
-                " ",
-                { ctx.diff.removed, "DiffRemoved" },
-            }
+            return string.format("[%d] %s", ctx.seq, ctx.h_time)
         end,
     },
 })
