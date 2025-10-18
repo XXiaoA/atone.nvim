@@ -1,7 +1,7 @@
 local api, fn = vim.api, vim.fn
 local ns = api.nvim_create_namespace("atone.tree")
 local diff = require("atone.diff")
-
+local core -- lazy import to avoid issues
 local config = require("atone.config")
 local time_ago = require("atone.utils").time_ago
 
@@ -65,7 +65,7 @@ end
 ---@field diff AtoneNode.Label.Ctx.Diff Diff statistics
 
 ---@param node AtoneNode
----@return {[1]: string, [2]: string}[]
+---@return {[1]: string, [2]: string}[]|string
 local function get_label(node)
     if node.diff_stats_from_parent == nil then
         -- cache the diff stats
@@ -98,7 +98,7 @@ local function get_label(node)
         diff = node.diff_stats_from_parent,
     })
     if type(label) == "string" then
-        return { { label, "Normal" } }
+        return label
     else
         return vim.iter(label)
             :map(function(item)
@@ -386,7 +386,10 @@ function M.render()
         id = id + 1
     end
 
-    local tree_buf = require("atone.core").get_tree_buf()
+    if core == nil then
+        core = require("atone.core")
+    end
+    local tree_buf = core.get_tree_buf()
     assert(type(tree_buf) == "number", "Unable to find the tree buffer.")
 
     do
@@ -399,18 +402,22 @@ function M.render()
             local label = get_label(node)
 
             if label ~= nil then
-                vim.schedule(function()
-                    M.extmark_ids[node.bufnr][node.seq] = api.nvim_buf_set_extmark(
-                        tree_buf,
-                        ns,
-                        lnum - 1,
-                        (M.lines[lnum]:len()) - 1,
-                        vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
-                            virt_text = label,
-                            id = M.extmark_ids[node.bufnr][node.seq],
-                        })
-                    )
-                end)
+                if type(label) == "string" then
+                    M.lines[lnum] = set_char_at(M.lines[lnum], max_depth * 2 + 4, label)
+                else
+                    vim.schedule(function()
+                        M.extmark_ids[node.bufnr][node.seq] = api.nvim_buf_set_extmark(
+                            tree_buf,
+                            ns,
+                            lnum - 1,
+                            (M.lines[lnum]:len()) - 1,
+                            vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
+                                virt_text = label,
+                                id = M.extmark_ids[node.bufnr][node.seq],
+                            })
+                        )
+                    end)
+                end
             end
         end
     end

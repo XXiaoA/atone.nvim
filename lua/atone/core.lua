@@ -184,6 +184,10 @@ function M.open()
             _diff_win = utils.new_win("belowright split", _auto_diff_buf, { height = height }, false)
         end
 
+        api.nvim_win_call(_tree_win, function()
+            fn.matchadd("AtoneIDBracket", [=[\v\[\d+\]]=])
+            fn.matchadd("AtoneID", [=[\v\[\zs\d+\ze\]]=])
+        end)
         M.refresh()
     else
         M.focus()

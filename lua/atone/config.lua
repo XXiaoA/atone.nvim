@@ -47,16 +47,7 @@ M.opts = {
         },
         ---@type (fun(ctx:AtoneNode.Label.Ctx):string|{[1]: any, [2]: string}[])?
         formatter = function(ctx)
-            return {
-                { "[", "AtoneIDBracket" },
-                { ctx.seq, "AtoneID" },
-                { "] ", "AtoneIDBracket" },
-                { ctx.h_time, "Comment" },
-                " ",
-                { ctx.diff.added, "DiffAdded" },
-                " ",
-                { ctx.diff.removed, "DiffRemoved" },
-            }
+            return string.format("[%d] %s", ctx.seq, ctx.h_time)
         end,
     },
     ui = {
