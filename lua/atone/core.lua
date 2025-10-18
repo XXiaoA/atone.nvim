@@ -22,7 +22,7 @@ local function pos_cursor_by_id(id)
     elseif id <= tree.total then
         local lnum = (tree.total - id) * 2 + 1
         local column = tree.nodes[tree.id_2seq(id)].depth * 2 - 1
-        column = vim.str_byteindex(tree.lines[lnum], "utf-16", column - 1) + 1
+        column = vim.str_byteindex(tree.lines[lnum], "utf-16", column - 1)
         api.nvim_win_set_cursor(_tree_win, { lnum, column })
     end
 end
