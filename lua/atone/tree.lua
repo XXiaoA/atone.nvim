@@ -32,9 +32,34 @@ end
 
 ---@class AtoneNode.Label.Ctx
 ---@field seq integer
+---@field is_current boolean
 ---@field time integer
 ---@field h_time string Time in a human-readable format
 ---@field diff AtoneNode.Label.Ctx.Diff Diff statistics
+
+---@class AtoneNode
+---@field seq integer
+---@field time? integer
+---@field depth? integer
+---@field parent? integer
+---@field children integer[]
+---@field child? integer
+---@field fork boolean?
+---@field bufnr? integer
+---@field diff_stats_from_parent? AtoneNode.Label.Ctx.Diff
+
+local M = {
+    --- { seq: node }
+    ---@type table<integer, AtoneNode>
+    nodes = {},
+    lines = {},
+    total = 1,
+    last_seq = 0,
+    cur_seq = 0,
+    --- {buf: {seq: extmark_id} }
+    ---@type table<integer, table<integer, integer >>
+    extmark_ids = {},
+}
 
 ---@param node AtoneNode
 ---@return {[1]: string, [2]: string}[]|string
@@ -64,6 +89,7 @@ local function get_label(node)
         h_time = "Original"
     end
     local label = config.opts.node_label.formatter({
+        is_current = M.cur_seq == node.seq,
         seq = node.seq,
         time = node.time or 0,
         h_time = h_time,
@@ -83,30 +109,6 @@ local function get_label(node)
             :totable()
     end
 end
-
----@class AtoneNode
----@field seq integer
----@field time? integer
----@field depth? integer
----@field parent? integer
----@field children integer[]
----@field child? integer
----@field fork boolean?
----@field bufnr? integer
----@field diff_stats_from_parent? AtoneNode.Label.Ctx.Diff
-
-local M = {
-    --- { seq: node }
-    ---@type table<integer, AtoneNode>
-    nodes = {},
-    lines = {},
-    total = 1,
-    last_seq = 0,
-    cur_seq = 0,
-    --- {buf: {seq: extmark_id} }
-    ---@type table<integer, table<integer, integer >>
-    extmark_ids = {},
-}
 
 local seqs -- { id: seq }
 local ids -- { seq: id }
