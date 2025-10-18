@@ -113,7 +113,7 @@ local function init()
                 return
             end
             vim.schedule(function()
-                local pre_seq = tree.id_2seq(id_under_cursor() - 1) or -1
+                local pre_seq = tree.nodes[seq_under_cursor()].parent or -1
                 local before_ctx = diff.get_context_by_seq(M.attach_buf, pre_seq)
                 ---@diagnostic disable-next-line: param-type-mismatch
                 local cur_ctx = diff.get_context_by_seq(M.attach_buf, seq_under_cursor())
@@ -213,8 +213,7 @@ function M.refresh()
             tree.nodes[tree.cur_seq].depth * 2 - 1 -- use node_at() because we maybe go to the original node
         )
 
-        local pre_id = tree.seq_2id(tree.cur_seq) - 1
-        local pre_seq = tree.id_2seq(pre_id) or -1
+        local pre_seq = tree.nodes[tree.cur_seq].parent or -1
         local before_ctx = diff.get_context_by_seq(M.attach_buf, pre_seq)
         local cur_ctx = diff.get_context_by_seq(M.attach_buf, tree.cur_seq)
         local diff_ctx = diff.get_diff(before_ctx, cur_ctx)
