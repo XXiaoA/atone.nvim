@@ -51,34 +51,9 @@ require("atone").setup({
         enabled = true,
         excluded_ft = { "oil" },
     },
-    node_label = {
-        ---@type vim.api.keyset.set_extmark
-        extmark_opts = {
-            strict = false,
-        },
-        ---@type (fun(ctx:AtoneNode.Label.Ctx):string|({[1]: any, [2]: string}|string)[])?
-        formatter = function(ctx)
-            -- possible return types:
-            --   - a string as the label
-            --   - a list where each item is either a string or a tuple <text, hl_group>.
-            return string.format("[%d] %s", ctx.seq, ctx.h_time)
-        end,
-    },
 })
 ```
 
-The `ctx` parameter of the `node_label.formatter` function is defined as follows:
-```lua 
----@class AtoneNode.Label.Ctx.Diff
----@field added integer
----@field removed integer
-
----@class AtoneNode.Label.Ctx
----@field seq integer
----@field time integer
----@field h_time string Time in a human-readable format
----@field diff AtoneNode.Label.Ctx.Diff Diff statistics
-```
 
 ## Highlight
 

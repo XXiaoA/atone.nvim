@@ -1,8 +1,4 @@
 local api, fn = vim.api, vim.fn
-local ns = api.nvim_create_namespace("atone.tree")
-local diff = require("atone.diff")
-local core -- lazy import to avoid issues
-local config = require("atone.config")
 local time_ago = require("atone.utils").time_ago
 
 --- get the character at column `col` (1-based index)
@@ -26,88 +22,23 @@ local function set_char_at(str, pos, ch)
     end
 end
 
----@class AtoneNode.Label.Ctx.Diff
----@field added integer
----@field removed integer
-
----@class AtoneNode.Label.Ctx
----@field seq integer
----@field is_current boolean
----@field time integer
----@field h_time string Time in a human-readable format
----@field diff AtoneNode.Label.Ctx.Diff Diff statistics
-
 ---@class AtoneNode
 ---@field seq integer
----@field time? integer
----@field depth? integer
----@field parent? integer
+---@field time integer
+---@field depth integer
+---@field parent integer
 ---@field children integer[]
----@field child? integer
+---@field child integer
 ---@field fork boolean?
----@field diff_stats_from_parent? AtoneNode.Label.Ctx.Diff
 
 local M = {
-    --- { seq: node }
-    ---@type table<integer, AtoneNode>
-    nodes = {},
+    ---@type AtoneNode[]
+    nodes = {}, -- { seq: node }
     lines = {},
     total = 1,
     last_seq = 0,
     cur_seq = 0,
-    ---@type integer
-    bufnr = nil, -- the buffer number that the tree is attached to
-    --- {buf: {seq: extmark_id} }
-    ---@type table<integer, table<integer, integer >>
-    extmark_ids = {},
 }
-
----@param node AtoneNode
----@return {[1]: string, [2]: string}[]|string
-local function get_label(node)
-    if node.diff_stats_from_parent == nil then
-        -- cache the diff stats
-        local diff_patch =
-            diff.get_diff(diff.get_context_by_seq(M.bufnr, node.seq), diff.get_context_by_seq(M.bufnr, node.parent or 0))
-        ---@type AtoneNode.Label.Ctx.Diff
-        local diff_stats = { added = 0, removed = 0 }
-        vim.iter(diff_patch):each(function(line)
-            if line:find("^-") ~= nil then
-                diff_stats.added = diff_stats.added + 1
-            elseif line:find("^+") ~= nil then
-                diff_stats.removed = diff_stats.removed + 1
-            end
-        end)
-        node.diff_stats_from_parent = diff_stats
-    end
-
-    local h_time
-    if node.seq > 0 and node.time ~= nil then
-        h_time = time_ago(node.time)
-    else
-        h_time = "Original"
-    end
-    local label = config.opts.node_label.formatter({
-        is_current = M.cur_seq == node.seq,
-        seq = node.seq,
-        time = node.time or 0,
-        h_time = h_time,
-        diff = node.diff_stats_from_parent,
-    })
-    if type(label) == "string" then
-        return label
-    else
-        return vim.iter(label)
-            :map(function(item)
-                if type(item) == "string" then
-                    return { item, "Normal" }
-                else
-                    return { tostring(item[1]), item[2] or "Normal" }
-                end
-            end)
-            :totable()
-    end
-end
 
 local seqs -- { id: seq }
 local ids -- { seq: id }
@@ -139,20 +70,6 @@ function M.convert(buf)
 
     -- initiate
     M.nodes = {}
-    M.extmark_ids[buf] = M.extmark_ids[buf] or {}
-    if M.bufnr ~= nil and M.bufnr ~= buf then
-        -- switching to a new buffer.
-        -- nuke the extmarks in the tree buffer.
-        local tree_buf = require("atone.core").get_tree_buf()
-        if tree_buf then
-            vim.iter(M.extmark_ids[M.bufnr]):each(vim.schedule_wrap(function(_, v)
-                api.nvim_buf_del_extmark(tree_buf, ns, v)
-            end))
-        end
-        M.extmark_ids[buf] = {}
-    end
-    M.bufnr = buf
-
     M.nodes[0] = {
         seq = 0,
         depth = 1,
@@ -169,13 +86,13 @@ function M.convert(buf)
     local earliest_seq = undotree.entries[1].seq
     local function flatten(rawtree, parent)
         for _, raw_node in ipairs(rawtree) do
-            M.nodes[raw_node.seq] = vim.tbl_deep_extend("force", M.nodes[raw_node.seq] or {}, {
+            ---@diagnostic disable-next-line: missing-fields
+            M.nodes[raw_node.seq] = {
                 seq = raw_node.seq,
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
                 children = {},
-            })
-
+            }
             if raw_node.alt then
                 flatten(raw_node.alt, parent)
             end
@@ -356,39 +273,19 @@ function M.render()
         id = id + 1
     end
 
-    if core == nil then
-        core = require("atone.core")
-    end
-    local tree_buf = core.get_tree_buf()
-    assert(type(tree_buf) == "number", "Unable to find the tree buffer.")
-
-    for i = 1, total do
-        local lnum = (total - i) * 2 + 1
-
-        local seq = M.id_2seq(i)
-        local node = M.nodes[seq]
-
-        local label = get_label(node)
-
-        if label ~= nil then
-            local label_col = max_depth * 2 + 4
-            if type(label) == "string" then
-                M.lines[lnum] = set_char_at(M.lines[lnum], label_col, label)
+    -- TODO: use extmarks
+    do
+        for i = 1, total do
+            local lnum = (total - i) * 2 + 1
+            local seq = M.id_2seq(i)
+            local node = M.nodes[seq]
+            local time
+            if node.time then
+                time = time_ago(node.time)
             else
-                vim.schedule(function()
-                    M.extmark_ids[M.bufnr][node.seq] = api.nvim_buf_set_extmark(
-                        tree_buf,
-                        ns,
-                        lnum - 1,
-                        label_col,
-                        vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
-                            virt_text = label,
-                            virt_text_win_col = label_col,
-                            id = M.extmark_ids[M.bufnr][node.seq],
-                        })
-                    )
-                end)
+                time = "Original"
             end
+            M.lines[lnum] = set_char_at(M.lines[lnum], max_depth * 2 + 4, "[" .. seq .. "] " .. time)
         end
     end
 

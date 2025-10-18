@@ -1,6 +1,4 @@
 local M = {}
-
----@class Atone.Config
 M.opts = {
     layout = {
         ---@type "left"|"right"
@@ -39,16 +37,6 @@ M.opts = {
         help = {
             quit_help = { "<C-c>", "q" },
         },
-    },
-    node_label = {
-        ---@type vim.api.keyset.set_extmark?
-        extmark_opts = {
-            strict = false,
-        },
-        ---@type (fun(ctx:AtoneNode.Label.Ctx):string|{[1]: any, [2]: string}[])?
-        formatter = function(ctx)
-            return string.format("[%d] %s", ctx.seq, ctx.h_time)
-        end,
     },
     ui = {
         -- refer to `:h 'winborder'`
