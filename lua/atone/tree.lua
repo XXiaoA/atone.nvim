@@ -5,52 +5,24 @@ local core -- lazy import to avoid issues
 local config = require("atone.config")
 local time_ago = require("atone.utils").time_ago
 
---- accept a string and return the start and end byte indices (1-based, inclusive)
---- for each of the characters.
----@param str string
----@return [integer, integer][]
-local function break_down_utf(str)
-    local idx = 1
-    local res = {}
-
-    while idx <= str:len() do
-        local _start = idx + vim.str_utf_start(str, idx)
-        local _end = idx + vim.str_utf_end(str, idx)
-        res[#res + 1] = { _start, _end }
-        idx = _end + 1
-    end
-
-    return res
-end
-
 --- get the character at column `col` (1-based index)
 ---@param line string
 ---@param col integer
 ---@return string
 local function get_char(line, col)
-    local range = break_down_utf(line)[col]
-    if range then
-        return line:sub(unpack(range))
-    else
-        return " "
-    end
+    return fn.strcharpart(line, col - 1, 1)
 end
 
 --- change the char of str in pos index.
 ---@param str string
 ---@param pos integer
 ---@param ch string
----@return string
 local function set_char_at(str, pos, ch)
-    local char_ranges = break_down_utf(str)
-    if #char_ranges < pos then
-        return str .. string.rep(" ", pos - #char_ranges - 1) .. ch
+    local len = fn.strchars(str)
+    if pos > len then
+        return str .. string.rep(" ", pos - len - 1) .. ch
     else
-        local partial = str:sub(pos == 1 and char_ranges[2][1] or 1, char_ranges[math.max(1, pos - 1)][2]) .. ch
-        if #char_ranges > pos then
-            partial = partial .. str:sub(char_ranges[pos + 1][1])
-        end
-        return partial
+        return fn.strcharpart(str, 0, pos - 1) .. ch .. fn.strcharpart(str, pos)
     end
 end
 
