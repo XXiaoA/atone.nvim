@@ -45,7 +45,6 @@ end
 ---@field children integer[]
 ---@field child? integer
 ---@field fork boolean?
----@field bufnr? integer
 ---@field diff_stats_from_parent? AtoneNode.Label.Ctx.Diff
 
 local M = {
@@ -56,6 +55,8 @@ local M = {
     total = 1,
     last_seq = 0,
     cur_seq = 0,
+    ---@type integer
+    bufnr = nil, -- the buffer number that the tree is attached to
     --- {buf: {seq: extmark_id} }
     ---@type table<integer, table<integer, integer >>
     extmark_ids = {},
@@ -66,10 +67,8 @@ local M = {
 local function get_label(node)
     if node.diff_stats_from_parent == nil then
         -- cache the diff stats
-        local diff_patch = diff.get_diff(
-            diff.get_context_by_seq(node.bufnr, node.seq),
-            diff.get_context_by_seq(node.bufnr, node.parent or 0)
-        )
+        local diff_patch =
+            diff.get_diff(diff.get_context_by_seq(M.bufnr, node.seq), diff.get_context_by_seq(M.bufnr, node.parent or 0))
         ---@type AtoneNode.Label.Ctx.Diff
         local diff_stats = { added = 0, removed = 0 }
         vim.iter(diff_patch):each(function(line)
@@ -141,15 +140,18 @@ function M.convert(buf)
     -- initiate
     M.nodes = {}
     M.extmark_ids[buf] = M.extmark_ids[buf] or {}
-    if M.nodes[0] and M.nodes[0].bufnr ~= buf then
-        local prev_buf = M.nodes[0].bufnr
+    if M.bufnr ~= nil and M.bufnr ~= buf then
+        -- switching to a new buffer.
+        -- nuke the extmarks in the tree buffer.
         local tree_buf = require("atone.core").get_tree_buf()
         if tree_buf then
-            vim.iter(M.extmark_ids[prev_buf]):each(vim.schedule_wrap(function(k, v)
+            vim.iter(M.extmark_ids[M.bufnr]):each(vim.schedule_wrap(function(_, v)
                 api.nvim_buf_del_extmark(tree_buf, ns, v)
             end))
         end
+        M.extmark_ids[buf] = {}
     end
+    M.bufnr = buf
 
     M.nodes[0] = {
         seq = 0,
@@ -157,16 +159,11 @@ function M.convert(buf)
         -- child is a descendant with the same depth as the node.
         child = nil,
         children = {},
-        bufnr = buf,
     }
     M.cur_seq = undotree.seq_cur
     M.last_seq = undotree.seq_last
     if M.last_seq == 0 then
         return M.nodes
-    end
-
-    if undotree.entries[1] == nil then
-        return
     end
 
     local earliest_seq = undotree.entries[1].seq
@@ -177,7 +174,6 @@ function M.convert(buf)
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
                 children = {},
-                bufnr = buf,
             })
 
             if raw_node.alt then
@@ -366,32 +362,30 @@ function M.render()
     local tree_buf = core.get_tree_buf()
     assert(type(tree_buf) == "number", "Unable to find the tree buffer.")
 
-    do
-        for i = 1, total do
-            local lnum = (total - i) * 2 + 1
+    for i = 1, total do
+        local lnum = (total - i) * 2 + 1
 
-            local seq = M.id_2seq(i)
-            local node = M.nodes[seq]
+        local seq = M.id_2seq(i)
+        local node = M.nodes[seq]
 
-            local label = get_label(node)
+        local label = get_label(node)
 
-            if label ~= nil then
-                if type(label) == "string" then
-                    M.lines[lnum] = set_char_at(M.lines[lnum], max_depth * 2 + 4, label)
-                else
-                    vim.schedule(function()
-                        M.extmark_ids[node.bufnr][node.seq] = api.nvim_buf_set_extmark(
-                            tree_buf,
-                            ns,
-                            lnum - 1,
-                            (M.lines[lnum]:len()) - 1,
-                            vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
-                                virt_text = label,
-                                id = M.extmark_ids[node.bufnr][node.seq],
-                            })
-                        )
-                    end)
-                end
+        if label ~= nil then
+            if type(label) == "string" then
+                M.lines[lnum] = set_char_at(M.lines[lnum], max_depth * 2 + 4, label)
+            else
+                vim.schedule(function()
+                    M.extmark_ids[M.bufnr][node.seq] = api.nvim_buf_set_extmark(
+                        tree_buf,
+                        ns,
+                        lnum - 1,
+                        (M.lines[lnum]:len()) - 1,
+                        vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
+                            virt_text = label,
+                            id = M.extmark_ids[M.bufnr][node.seq],
+                        })
+                    )
+                end)
             end
         end
     end
