@@ -185,8 +185,8 @@ function M.open()
         end
 
         api.nvim_win_call(_tree_win, function()
-            fn.matchadd("AtoneIDBracket", [=[\v\[\d+\]]=])
-            fn.matchadd("AtoneID", [=[\v\[\zs\d+\ze\]]=])
+            fn.matchadd("AtoneSeqBracket", [=[\v\[\d+\]]=])
+            fn.matchadd("AtoneSeq", [=[\v\[\zs\d+\ze\]]=])
         end)
         M.refresh()
     else

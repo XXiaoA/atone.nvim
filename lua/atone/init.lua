@@ -4,9 +4,9 @@ local core = require("atone.core")
 local M = {}
 
 local highlights = {
-    ID = { link = "Number" },
+    Seq = { link = "Number" },
     CurrentNode = { link = "Keyword" },
-    IDBracket = { link = "Comment" },
+    SeqBracket = { link = "Comment" },
 }
 
 local function set_highlights()
