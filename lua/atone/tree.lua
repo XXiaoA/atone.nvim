@@ -371,17 +371,19 @@ function M.render()
         local label = get_label(node)
 
         if label ~= nil then
+            local label_col = max_depth * 2 + 4
             if type(label) == "string" then
-                M.lines[lnum] = set_char_at(M.lines[lnum], max_depth * 2 + 4, label)
+                M.lines[lnum] = set_char_at(M.lines[lnum], label_col, label)
             else
                 vim.schedule(function()
                     M.extmark_ids[M.bufnr][node.seq] = api.nvim_buf_set_extmark(
                         tree_buf,
                         ns,
                         lnum - 1,
-                        (M.lines[lnum]:len()) - 1,
+                        label_col,
                         vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
                             virt_text = label,
+                            virt_text_win_col = label_col,
                             id = M.extmark_ids[M.bufnr][node.seq],
                         })
                     )
