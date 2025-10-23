@@ -285,4 +285,8 @@ function M.get_tree_buf()
     return _tree_buf
 end
 
+---@return integer?
+function M.get_tree_win()
+    return _tree_win
+end
 return M

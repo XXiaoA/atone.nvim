@@ -1,9 +1,12 @@
 local api, fn = vim.api, vim.fn
 local ns = api.nvim_create_namespace("atone.tree")
 local diff = require("atone.diff")
-local core -- lazy import to avoid issues
 local config = require("atone.config")
 local time_ago = require("atone.utils").time_ago
+
+local function core()
+    return require("atone.core")
+end
 
 --- get the character at column `col` (1-based index)
 ---@param line string
@@ -257,6 +260,8 @@ function M.convert(buf)
     return M.nodes
 end
 
+local extmarks_args = {}
+
 -- we should reverse the table: put the node with greater id in the smaller index
 --      seq  id  index
 -- @    [4]   5    1
@@ -356,10 +361,7 @@ function M.render()
         id = id + 1
     end
 
-    if core == nil then
-        core = require("atone.core")
-    end
-    local tree_buf = core.get_tree_buf()
+    local tree_buf = core().get_tree_buf()
     assert(type(tree_buf) == "number", "Unable to find the tree buffer.")
 
     for i = 1, total do
@@ -375,24 +377,37 @@ function M.render()
             if type(label) == "string" then
                 M.lines[lnum] = set_char_at(M.lines[lnum], label_col, label)
             else
-                vim.schedule(function()
-                    M.extmark_ids[M.bufnr][node.seq] = api.nvim_buf_set_extmark(
-                        tree_buf,
-                        ns,
-                        lnum - 1,
-                        label_col,
-                        vim.tbl_deep_extend("force", config.opts.node_label.extmark_opts or {}, {
-                            virt_text = label,
-                            virt_text_win_col = label_col,
-                            id = M.extmark_ids[M.bufnr][node.seq],
-                        })
-                    )
-                end)
+                extmarks_args[lnum - 1] =
+                    { col = label_col, label = label, id = M.extmark_ids[M.bufnr][node.seq], seq = node.seq }
             end
         end
     end
 
     return M.lines
 end
+
+api.nvim_set_decoration_provider(ns, {
+    on_win = function(_, winid, bufnr, toprow, botrow)
+        if winid ~= core().get_tree_win() or bufnr ~= core().get_tree_buf() then
+            return false
+        end
+        for lnum = toprow, botrow do
+            local args = extmarks_args[lnum]
+            if args then
+                M.extmark_ids[M.bufnr][args.seq] = api.nvim_buf_set_extmark(
+                    bufnr,
+                    ns,
+                    lnum,
+                    args.col,
+                    vim.tbl_deep_extend(
+                        "force",
+                        config.opts.node_label.extmark_opts or {},
+                        { virt_text = args.label, virt_text_win_col = args.col, id = args.id }
+                    )
+                )
+            end
+        end
+    end,
+})
 
 return M
