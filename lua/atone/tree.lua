@@ -377,8 +377,7 @@ function M.render()
             if type(label) == "string" then
                 M.lines[lnum] = set_char_at(M.lines[lnum], label_col, label)
             else
-                extmarks_args[lnum - 1] =
-                    { col = label_col, label = label, id = M.extmark_ids[M.bufnr][node.seq], seq = node.seq }
+                extmarks_args[lnum - 1] = { col = label_col, label = label, seq = node.seq }
             end
         end
     end
@@ -402,7 +401,7 @@ api.nvim_set_decoration_provider(ns, {
                     vim.tbl_deep_extend(
                         "force",
                         config.opts.node_label.extmark_opts or {},
-                        { virt_text = args.label, virt_text_win_col = args.col, id = args.id }
+                        { virt_text = args.label, virt_text_win_col = args.col, id = M.extmark_ids[M.bufnr][args.seq] }
                     )
                 )
             end
