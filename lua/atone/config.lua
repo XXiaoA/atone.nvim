@@ -45,6 +45,14 @@ M.opts = {
         border = "single",
         -- compact graph style
         compact = false,
+        node_label = {
+            ---@param ctx AtoneNode.Label.Ctx
+            ---@return string|[string, string][]
+            formatter = function(ctx)
+                return string.format("[%d] %s", ctx.seq, ctx.h_time)
+            end,
+            extmark_opts = { strict = false },
+        },
     },
 }
 

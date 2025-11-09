@@ -1,6 +1,15 @@
 local api, fn = vim.api, vim.fn
+local diff = require("atone.diff")
 local config = require("atone.config")
+local utils = require("atone.utils")
 local time_ago = require("atone.utils").time_ago
+
+local extmark_meta = {
+    col = nil,
+    ns = api.nvim_create_namespace("atone.tree"),
+    ---@type table<integer, [string, string][]>
+    items = {},
+}
 
 --- get the character at column `col` (1-based index)
 ---@param line string
@@ -25,21 +34,86 @@ end
 
 ---@class AtoneNode
 ---@field seq integer
----@field time integer
+---@field time integer?
 ---@field depth integer
----@field parent integer
+---@field parent integer?
 ---@field children integer[]
----@field child integer
+---@field child integer?
+---@field bufnr integer
 ---@field fork boolean?
+---@field label string|table|nil
+
+---@class AtoneNode.Label.Ctx.Diff
+---@field added integer
+---@field removed integer
+
+---@class AtoneNode.Label.Ctx
+---@field seq integer
+---@field is_current boolean
+---@field time integer
+---@field h_time string Time in a human-readable format
+---@field diff AtoneNode.Label.Ctx.Diff Diff statistics
 
 local M = {
-    ---@type AtoneNode[]
+    ---@type table<integer, AtoneNode>
     nodes = {}, -- { seq: node }
     lines = {},
     total = 1,
     last_seq = 0,
     cur_seq = 0,
 }
+
+---@param node AtoneNode
+local function get_node_label(node)
+    local h_time
+    if node.seq > 0 and node.time ~= nil then
+        h_time = utils.time_ago(node.time)
+    else
+        h_time = "Original"
+    end
+    local diff_patch
+    if node.parent == nil then
+        diff_patch = diff.get_diff(diff.get_context_by_seq(node.bufnr, node.seq), {})
+    else
+        diff_patch =
+            diff.get_diff(diff.get_context_by_seq(node.bufnr, node.seq), diff.get_context_by_seq(node.bufnr, node.parent))
+    end
+
+    ---@type AtoneNode.Label.Ctx.Diff
+    local diff_stats = { added = 0, removed = 0 }
+    vim.iter(diff_patch):each(function(line)
+        if line:find("^-") ~= nil then
+            diff_stats.added = diff_stats.added + 1
+        elseif line:find("^+") ~= nil then
+            diff_stats.removed = diff_stats.removed + 1
+        end
+    end)
+
+    ---@type AtoneNode.Label.Ctx
+    local ctx = {
+        seq = node.seq,
+        is_current = node.seq == M.cur_seq,
+        time = node.time,
+        h_time = h_time,
+        diff = diff_stats,
+    }
+    local label = config.opts.ui.node_label.formatter(ctx)
+    if type(label) == "string" then
+        return label
+    else
+        return vim.iter(label)
+            :map(function(item)
+                if type(item) == "string" then
+                    return { item, "Normal" }
+                elseif type(item) == "table" then
+                    return { item[1], item[2] or "Normal" }
+                else
+                    error("Unsupported item in the label: " .. vim.inspect(item))
+                end
+            end)
+            :totable()
+    end
+end
 
 local seqs -- { id: seq }
 local ids -- { seq: id }
@@ -77,6 +151,7 @@ function M.convert(buf)
         -- child is a descendant with the same depth as the node.
         child = nil,
         children = {},
+        bufnr = buf,
     }
     M.cur_seq = undotree.seq_cur
     M.last_seq = undotree.seq_last
@@ -93,6 +168,7 @@ function M.convert(buf)
                 time = raw_node.time,
                 parent = parent, -- 0 means the root node
                 children = {},
+                bufnr = buf,
             }
             if raw_node.alt then
                 flatten(raw_node.alt, parent)
@@ -189,6 +265,7 @@ end
 function M.render()
     M.lines = {}
     local max_depth = 1
+
     seqs = { 0 }
     -- the order number of node. Root node's id is 1
     local id = 1
@@ -291,6 +368,9 @@ function M.render()
         id = id + 1
     end
 
+    local label_col = max_depth * 2 + 4
+    extmark_meta.col = label_col
+    extmark_meta.items = {}
     -- TODO: use extmarks
     do
         for i = 1, total do
@@ -303,11 +383,47 @@ function M.render()
             else
                 time = "Original"
             end
-            M.lines[lnum] = set_char_at(M.lines[lnum], max_depth * 2 + 4, "[" .. seq .. "] " .. time)
+            local label = get_node_label(node)
+            if type(label) == "string" then
+                M.lines[lnum] = set_char_at(M.lines[lnum], label_col, "[" .. seq .. "] " .. time)
+            else
+                extmark_meta.items[lnum - 1] = label
+            end
         end
     end
 
     return M.lines
 end
+
+api.nvim_set_decoration_provider(extmark_meta.ns, {
+    on_win = function(_, winid, bufnr, toprow, botrow)
+        local core = require("atone.core")
+        local tree_buf = core.get_tree_buf()
+        if tree_buf ~= bufnr or tree_buf == nil then
+            return
+        end
+
+        vim.iter(api.nvim_buf_get_extmarks(bufnr, extmark_meta.ns, 0, -1, {})):each(function(mark)
+            api.nvim_buf_del_extmark(bufnr, extmark_meta.ns, mark[1])
+        end)
+
+        for lnum = math.max(toprow - 1, 0), botrow do
+            local label = extmark_meta.items[lnum]
+            if label then
+                api.nvim_buf_set_extmark(
+                    bufnr,
+                    extmark_meta.ns,
+                    lnum,
+                    extmark_meta.col,
+                    vim.tbl_deep_extend(
+                        "force",
+                        config.opts.ui.node_label.extmark_opts or {},
+                        { virt_text = label, virt_text_win_col = extmark_meta.col }
+                    )
+                )
+            end
+        end
+    end,
+})
 
 return M

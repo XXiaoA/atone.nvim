@@ -295,4 +295,8 @@ function M.toggle()
     end
 end
 
+function M.get_tree_buf()
+    return _tree_buf
+end
+
 return M
