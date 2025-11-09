@@ -1,4 +1,5 @@
 local api = vim.api
+local utils = require("atone.utils")
 local M = {}
 
 --- get the buffer context in nth undo node
@@ -6,7 +7,7 @@ local M = {}
 ---@param buf integer
 ---@param seq integer
 ---@return string[]
-function M.get_context_by_seq(buf, seq)
+M.get_context_by_seq = utils.cache(function(buf, seq)
     if seq < 0 then
         return {}
     end
@@ -33,9 +34,9 @@ function M.get_context_by_seq(buf, seq)
     vim.api.nvim_buf_delete(tmpbuf, { force = true })
     os.remove(tmp_undo_file)
     return result
-end
+end)
 
-function M.get_diff(ctx1, ctx2)
+M.get_diff = utils.cache(function(ctx1, ctx2)
     ---@diagnostic disable-next-line: deprecated
     local diff = vim.text.diff or vim.diff
     local result = diff(table.concat(ctx1, "\n") .. "\n", table.concat(ctx2, "\n") .. "\n", {
@@ -46,6 +47,6 @@ function M.get_diff(ctx1, ctx2)
     })
     ---@diagnostic disable-next-line: param-type-mismatch
     return vim.split(result, "\n")
-end
+end)
 
 return M
