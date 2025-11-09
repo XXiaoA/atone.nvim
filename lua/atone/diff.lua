@@ -6,7 +6,7 @@ local M = {}
 ---@param buf integer
 ---@param seq integer
 ---@return string[]
-M.get_context_by_seq = function(buf, seq)
+function M.get_context_by_seq(buf, seq)
     if seq < 0 then
         return {}
     end
@@ -35,7 +35,7 @@ M.get_context_by_seq = function(buf, seq)
     return result
 end
 
-M.get_diff = function(ctx1, ctx2)
+function M.get_diff(ctx1, ctx2)
     ---@diagnostic disable-next-line: deprecated
     local diff = vim.text.diff or vim.diff
     local result = diff(table.concat(ctx1, "\n") .. "\n", table.concat(ctx2, "\n") .. "\n", {
