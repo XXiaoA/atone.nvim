@@ -134,4 +134,21 @@ function M.time_ago(past_time)
     end
 end
 
+---A decorator that caches function results.
+---Inspired by functools.cache in Python.
+---**Only use this on functions where the parameters can uniquely determine the return value.**
+---@generic F: fun(...):any
+---@param f F
+---@return F
+function M.cache(f)
+    local cache = {}
+    return function(...)
+        local encoded_key = vim.mpack.encode({ ... })
+        if cache[encoded_key] == nil then
+            cache[encoded_key] = f(...)
+        end
+        return cache[encoded_key]
+    end
+end
+
 return M

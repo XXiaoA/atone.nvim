@@ -99,6 +99,34 @@ require("atone").setup({
         border = "single",
         -- compact graph style
         compact = false,
+        node_label = {
+            ---@class AtoneNode.Label.Ctx
+            ---@field seq integer
+            ---@field is_current boolean
+            ---@field time integer
+            ---@field h_time string Time in a human-readable format
+            ---@field diff {added: integer, removed: integer} Diff statistics
+
+            --- Customise the the text that is placed next to the nodes
+            ---@param ctx AtoneNode.Label.Ctx
+            ---@return string|[string, string][]
+            formatter = function(ctx)
+                -- you may return a string built from the `ctx`
+                return string.format("[%d] %s", ctx.seq, ctx.h_time)
+                -- or a list of 2-tuples that will be rendered as extmarks
+                return {
+                    "[",
+                    { ctx.seq, ctx.is_current and "keyword" or "comment" },
+                    "] ",
+                    { ctx.h_time, "comment" },
+                    " ",
+                    { ctx.diff.added, "diffadded" },
+                    " ",
+                    { ctx.diff.removed, "diffremoved" },
+                }
+            end,
+            extmark_opts = { strict = false },
+        },
     },
 })
 ```

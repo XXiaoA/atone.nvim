@@ -129,7 +129,7 @@ local function init()
                 return
             end
             vim.schedule(function()
-                local pre_seq = tree.nodes[seq_under_cursor()].parent or -1
+                local pre_seq = (tree.nodes[seq_under_cursor()] or {}).parent or -1
                 local before_ctx = diff.get_context_by_seq(M.attach_buf, pre_seq)
                 ---@diagnostic disable-next-line: param-type-mismatch
                 local cur_ctx = diff.get_context_by_seq(M.attach_buf, seq_under_cursor())
@@ -147,6 +147,14 @@ local function init()
         buffer = _auto_diff_buf,
         group = M.augroup,
         callback = M.close,
+    })
+
+    api.nvim_create_autocmd({ "WinResized", "WinScrolled" }, {
+        group = M.augroup,
+        buffer = _tree_buf,
+        callback = function(args)
+            tree.render()
+        end,
     })
 
     -- register keymaps
@@ -297,6 +305,10 @@ end
 
 function M.get_tree_buf()
     return _tree_buf
+end
+
+function M.get_tree_winid()
+    return _tree_win
 end
 
 return M

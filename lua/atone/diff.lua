@@ -48,4 +48,17 @@ function M.get_diff(ctx1, ctx2)
     return vim.split(result, "\n")
 end
 
+---@param bufnr integer
+---@param child integer
+---@param parent? integer
+function M.get_diff_by_seq(bufnr, child, parent)
+    local parent_ctx
+    if parent then
+        parent_ctx = M.get_context_by_seq(bufnr, parent)
+    else
+        parent_ctx = {}
+    end
+    return M.get_diff(M.get_context_by_seq(bufnr, child), parent_ctx)
+end
+
 return M
