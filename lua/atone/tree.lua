@@ -72,27 +72,38 @@ local function get_node_label(node)
         h_time = "Original"
     end
 
-    local diff_patch = get_diff_by_seq_cached(node.bufnr, node.seq, node.parent)
-
-    ---@type AtoneNode.Label.Ctx.Diff
-    local diff_stats = { added = 0, removed = 0 }
-    vim.iter(diff_patch):each(function(line)
-        if line:find("^-") ~= nil then
-            diff_stats.added = diff_stats.added + 1
-        elseif line:find("^+") ~= nil then
-            diff_stats.removed = diff_stats.removed + 1
-        end
-    end)
-
-    ---@type AtoneNode.Label.Ctx
     local ctx = {
         seq = node.seq,
         is_current = node.seq == M.cur_seq,
         time = node.time,
         h_time = h_time,
-        diff = diff_stats,
+        diff = function()
+            local diff_patch = get_diff_by_seq_cached(node.bufnr, node.seq, node.parent)
+
+            ---@type AtoneNode.Label.Ctx.Diff
+            local diff_stats = { added = 0, removed = 0 }
+            vim.iter(diff_patch):each(function(line)
+                if line:find("^-") ~= nil then
+                    diff_stats.added = diff_stats.added + 1
+                elseif line:find("^+") ~= nil then
+                    diff_stats.removed = diff_stats.removed + 1
+                end
+            end)
+            return diff_stats
+        end,
     }
-    local label = config.opts.ui.node_label.formatter(ctx)
+
+    local label = config.opts.ui.node_label.formatter(setmetatable({}, {
+        __index = function(t, k)
+            ---@type boolean|string|integer|function
+            local val = ctx[k]
+            if type(val) == "function" then
+                -- allows on-demand of the diff stats
+                val = val() ---@cast val -function
+            end
+            return val
+        end,
+    }))
     if type(label) == "string" then
         return label
     else
