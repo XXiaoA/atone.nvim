@@ -10,23 +10,29 @@ local M = {
     _show = nil,
     attach_buf = nil,
     augroup = api.nvim_create_augroup("atone", { clear = true }),
+    _tree_win = nil,
+    _float_win = nil,
+    _diff_win = nil,
+    _tree_buf = nil,
+    _help_buf = nil,
+    _auto_diff_buf = nil,
+    _dummy_win = nil,
+    _dummy_buf = nil,
 }
--- _float_win: we have one float window only at the same time
--- _manual_diff_buf: diff result between current and given point (triggered by user), shown in float window
--- _auto_diff_buf: diff result triggered automatically, shown in the window below tree graph
-local _tree_win, _float_win, _diff_win, _tree_buf, _help_buf, _manual_diff_buf, _auto_diff_buf
+
+local _resize_autocmd_registered = false
 
 --- position the cursor at a specific node in the tree graph
 ---@param id integer
 local function pos_cursor_by_id(id)
     local compact = config.opts.ui.compact
     if id <= 0 then
-        api.nvim_win_set_cursor(_tree_win, { compact and tree.total or tree.total * 2 - 1, 0 })
+        api.nvim_win_set_cursor(M._tree_win, { compact and tree.total or tree.total * 2 - 1, 0 })
     elseif id <= tree.total then
         local lnum = compact and tree.total - id + 1 or (tree.total - id) * 2 + 1
         local column = tree.nodes[tree.id_2seq(id)].depth * 2 - 1
         column = vim.str_byteindex(tree.lines[lnum], "utf-16", column - 1)
-        api.nvim_win_set_cursor(_tree_win, { lnum, column })
+        api.nvim_win_set_cursor(M._tree_win, { lnum, column })
     end
 end
 
@@ -43,14 +49,14 @@ end
 local function id_under_cursor()
     -- compact: total - cur_id + 1 = lnum
     -- otherwise: 2 * (total - cur_id) + 1 = lnum
-    local lnum = api.nvim_win_get_cursor(_tree_win)[1]
+    local lnum = api.nvim_win_get_cursor(M._tree_win)[1]
     return config.opts.ui.compact and tree.total - lnum + 1 or tree.total - (lnum - 1) / 2
 end
 
 --- get the seq under cursor in _tree_win
 --- when the cursor is between two nodes, return nil
 ---@return integer|nil
-local function seq_under_cursor()
+local function get_seq_under_cursor()
     local id = id_under_cursor()
     if id % 1 ~= 0 then
         return nil
@@ -68,7 +74,7 @@ local mappings = {
     },
     quit_help = {
         function()
-            pcall(api.nvim_win_close, _float_win, true)
+            pcall(api.nvim_win_close, M._float_win, true)
         end,
         "Close help window",
     },
@@ -99,7 +105,7 @@ local mappings = {
     },
     undo_to = {
         function()
-            local seq = seq_under_cursor()
+            local seq = get_seq_under_cursor()
             if seq then
                 undo_to(seq)
                 M.refresh()
@@ -115,7 +121,7 @@ local mappings = {
     },
     set_mark = {
         function()
-            local seq = seq_under_cursor()
+            local seq = get_seq_under_cursor()
             if not seq then
                 return
             end
@@ -141,7 +147,7 @@ local mappings = {
     },
     delete_mark = {
         function()
-            local seq = seq_under_cursor()
+            local seq = get_seq_under_cursor()
             if not seq then
                 return
             end
@@ -223,72 +229,177 @@ local mappings = {
 --- Update the diff display buffer and apply the extra diff preview layers.
 ---@param diff_lines string[]
 local function update_diff_buf(diff_lines)
-    utils.set_text(_auto_diff_buf, diff_lines)
+    utils.set_text(M._auto_diff_buf, diff_lines)
     local lang = config.opts.diff_cur_node.treesitter and highlight.get_lang(M.attach_buf) or nil
     local target_syntax = lang and "" or "diff"
-    if vim.bo[_auto_diff_buf].syntax ~= target_syntax then
-        api.nvim_set_option_value("syntax", target_syntax, { buf = _auto_diff_buf })
+    if vim.bo[M._auto_diff_buf].syntax ~= target_syntax then
+        api.nvim_set_option_value("syntax", target_syntax, { buf = M._auto_diff_buf })
     end
-    highlight.apply(_auto_diff_buf, diff_lines, lang, {
+    highlight.apply(M._auto_diff_buf, diff_lines, lang, {
         treesitter = config.opts.diff_cur_node.treesitter,
         inline_diff = config.opts.diff_cur_node.inline_diff,
     })
 end
 
+---@param direction string
+---@return string
+local function get_anchor(direction)
+    return direction == "left" and "SW" or "SE"
+end
+
+---@param direction string
+---@return integer
+local function get_col(direction)
+    if direction == "left" then
+        return 0
+    end
+    return api.nvim_win_get_width(M._dummy_win)
+end
+
+---@param lines string[]?
+---@return integer
+local function compute_tree_width(lines)
+    local width = config.opts.layout.width
+    if width ~= "adaptive" then
+        ---@diagnostic disable-next-line: param-type-mismatch
+        return width < 1 and math.floor(vim.o.columns * width + 0.5) or math.floor(width)
+    end
+
+    lines = lines or api.nvim_buf_get_lines(M._tree_buf, 0, 1, false)
+    local first_line = lines[1] or ""
+    return fn.strdisplaywidth(first_line) + 10
+end
+
+local function compute_diff_height()
+    return math.floor(api.nvim_win_get_height(M._tree_win) * config.opts.diff_cur_node.split_percent + 0.5)
+end
+
+local function uses_float_diff()
+    return config.opts.diff_cur_node.enabled and config.opts.diff_cur_node.width ~= "adaptive"
+end
+
+local function resize_tree_window(lines)
+    if not utils.win_exists(M._tree_win) then
+        return
+    end
+
+    api.nvim_win_set_width(M._tree_win, compute_tree_width(lines))
+end
+
+local function pos_float_diff_win()
+    if not M._show or not uses_float_diff() then
+        return
+    end
+    if not (utils.win_exists(M._tree_win) and utils.win_exists(M._diff_win) and utils.win_exists(M._dummy_win)) then
+        return
+    end
+
+    local diff_width_conf = config.opts.diff_cur_node.width
+
+    local diff_width = diff_width_conf < 1 and math.floor(vim.o.columns * diff_width_conf + 0.5)
+        ---@diagnostic disable-next-line: param-type-mismatch
+        or math.floor(diff_width_conf)
+
+    local col = get_col(config.opts.layout.direction)
+    local anchor = get_anchor(config.opts.layout.direction)
+    local height = compute_diff_height()
+
+    api.nvim_win_set_height(M._dummy_win, height)
+    api.nvim_win_set_config(M._diff_win, {
+        width = math.max(1, diff_width),
+        height = height,
+        relative = "win",
+        win = M._dummy_win,
+        anchor = anchor,
+        row = height - 1,
+        col = col,
+    })
+end
+
 local function init()
-    _tree_buf = utils.new_buf()
-    _auto_diff_buf = utils.new_buf()
-    _help_buf = utils.new_buf()
+    for _, buf_key in ipairs({ "tree_buf", "auto_diff_buf", "help_buf", "dummy_buf" }) do
+        local old_buf = M["_" .. buf_key]
+        if old_buf and api.nvim_buf_is_valid(old_buf) then
+            pcall(api.nvim_buf_delete, old_buf, { force = true })
+        end
+    end
+
+    M._tree_buf = utils.new_buf()
+    M._auto_diff_buf = utils.new_buf()
+    M._help_buf = utils.new_buf()
+    M._dummy_buf = nil
 
     api.nvim_create_autocmd("CursorMoved", {
-        buffer = _tree_buf,
+        buffer = M._tree_buf,
         group = M.augroup,
-        callback = function()
-            local seq = seq_under_cursor()
+        callback = vim.schedule_wrap(function()
+            local seq = get_seq_under_cursor()
             if not seq or not config.opts.diff_cur_node.enabled then
                 return
             end
-            vim.schedule(function()
-                ---@diagnostic disable-next-line: param-type-mismatch
-                update_diff_buf(diff.get_diff_by_seq(M.attach_buf, seq))
-            end)
-        end,
+            update_diff_buf(diff.get_diff_by_seq(M.attach_buf, seq))
+        end),
     })
+
     api.nvim_create_autocmd("WinClosed", {
-        buffer = _tree_buf,
+        buffer = M._tree_buf,
         group = M.augroup,
         callback = M.close,
     })
     api.nvim_create_autocmd("WinClosed", {
-        buffer = _auto_diff_buf,
+        buffer = M._auto_diff_buf,
         group = M.augroup,
         callback = M.close,
     })
+
+    if not _resize_autocmd_registered then
+        api.nvim_create_autocmd("WinResized", {
+            group = M.augroup,
+            callback = function()
+                if M._show then
+                    vim.schedule(function()
+                        pos_float_diff_win()
+                    end)
+                end
+            end,
+        })
+        _resize_autocmd_registered = true
+    end
 
     -- register keymaps
     local keymaps_conf = config.opts.keymaps
     for action, lhs in pairs(keymaps_conf.tree) do
-        utils.keymap("n", lhs, mappings[action][1], { buffer = _tree_buf })
+        utils.keymap("n", lhs, mappings[action][1], { buffer = M._tree_buf })
         used_mappings[action] = { lhs, mappings[action][2] }
     end
     for action, lhs in pairs(keymaps_conf.auto_diff) do
-        utils.keymap("n", lhs, mappings[action][1], { buffer = _auto_diff_buf })
+        utils.keymap("n", lhs, mappings[action][1], { buffer = M._auto_diff_buf })
         used_mappings[action] = { lhs, mappings[action][2] }
     end
     for action, lhs in pairs(keymaps_conf.help) do
-        utils.keymap("n", lhs, mappings[action][1], { buffer = _help_buf })
+        utils.keymap("n", lhs, mappings[action][1], { buffer = M._help_buf })
         used_mappings[action] = { lhs, mappings[action][2] }
     end
 end
 
 local function check()
-    if api.nvim_buf_is_valid(_auto_diff_buf) and api.nvim_buf_is_valid(_tree_buf) and api.nvim_buf_is_valid(_help_buf) then
-        return true
+    if
+        not (
+            api.nvim_buf_is_valid(M._auto_diff_buf)
+            and api.nvim_buf_is_valid(M._tree_buf)
+            and api.nvim_buf_is_valid(M._help_buf)
+        )
+    then
+        M.close()
+        return false
     end
-    M.close()
-    pcall(api.nvim_buf_delete, _tree_buf, { force = false })
-    pcall(api.nvim_buf_delete, _auto_diff_buf, { force = false })
-    pcall(api.nvim_buf_delete, _help_buf, { force = false })
+
+    if uses_float_diff() and not api.nvim_buf_is_valid(M._dummy_buf) then
+        M.close()
+        return false
+    end
+
+    return true
 end
 
 function M.open()
@@ -296,35 +407,100 @@ function M.open()
         init()
     end
 
-    if not M._show then
-        M._show = true
-        M.attach_buf = api.nvim_get_current_buf()
-        local direction = config.opts.layout.direction == "left" and "topleft" or "botright"
-        local width = config.opts.layout.width
-        if width == "adaptive" then
-            ---@diagnostic disable-next-line: cast-local-type
-            width = nil -- resize the window in M.refresh()
-        elseif width < 1 then
-            width = math.floor(vim.o.columns * width + 0.5)
-        else
-            ---@diagnostic disable-next-line: param-type-mismatch
-            width = math.floor(width)
-        end
-        _tree_win = utils.new_win(direction .. " vsplit", _tree_buf, { width = width })
-        if config.opts.diff_cur_node.enabled then
-            local height = math.floor(api.nvim_win_get_height(_tree_win) * config.opts.diff_cur_node.split_percent + 0.5)
-            _diff_win = utils.new_win("belowright split", _auto_diff_buf, { height = height }, false)
-        end
-
-        api.nvim_win_call(_tree_win, function()
-            fn.matchadd("AtoneSeqBracket", [=[\v\[\d+\]]=])
-            fn.matchadd("AtoneSeq", [=[\v\[\zs\d+\ze\]]=])
-            fn.matchadd("AtoneMark", [=[\v\{[^}]+\}]=])
-        end)
-        M.refresh()
-    else
+    if M._show then
         M.focus()
+        return
     end
+
+    M._show = true
+    M.attach_buf = api.nvim_get_current_buf()
+
+    local direction = config.opts.layout.direction == "left" and "topleft" or "botright"
+
+    local width = compute_tree_width()
+    M._tree_win = utils.new_win(direction .. " vsplit", M._tree_buf, { win_config = { width = width } })
+    if config.opts.diff_cur_node.enabled then
+        local height = compute_diff_height()
+        local diff_width_conf = config.opts.diff_cur_node.width
+
+        if uses_float_diff() then
+            local diff_width = diff_width_conf < 1 and math.floor(vim.o.columns * diff_width_conf + 0.5)
+                ---@diagnostic disable-next-line: param-type-mismatch
+                or math.floor(diff_width_conf)
+
+            if not (M._dummy_buf and api.nvim_buf_is_valid(M._dummy_buf)) then
+                M._dummy_buf = utils.new_buf()
+                api.nvim_create_autocmd("WinEnter", {
+                    buffer = M._dummy_buf,
+                    group = M.augroup,
+                    callback = function()
+                        if utils.win_exists(M._diff_win) then
+                            api.nvim_set_current_win(M._diff_win)
+                        end
+                    end,
+                })
+            end
+            M._dummy_win = utils.new_win("belowright split", M._dummy_buf, { win_config = { height = height } }, false)
+
+            local anchor = get_anchor(config.opts.layout.direction)
+            local col = get_col(config.opts.layout.direction)
+
+            -- 'none', 'solid', and 'shadow' are handled specially or by fallback
+            local BORDER_MAP = {
+                single = { "┌", "─", "┐", "│", "┘", "─", "└", "│" },
+                double = { "╔", "═", "╗", "║", "╝", "═", "╚", "║" },
+                rounded = { "╭", "─", "╮", "│", "╯", "─", "╰", "│" },
+                bold = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" },
+                solid = { " ", " ", " ", " ", " ", " ", " ", " " },
+                shadow = { "", "", " ", " ", " ", " ", " ", "" },
+            }
+            local border = config.opts.ui.border
+            local border_chars
+            if type(border) == "string" and border ~= "none" then
+                -- Fallback to 'single' if the string doesn't match our map
+                local template = BORDER_MAP[border] or BORDER_MAP.single
+                border_chars = { unpack(template) }
+                -- Indices: 1:top-left, 2:top, 3:top-right, 4:right, 5:bottom-right, 6:bottom, 7:bottom-left, 8:left
+                if config.opts.layout.direction == "left" then
+                    -- Remove the left-side connectors for a seamless sidebar look
+                    border_chars[6] = "" -- Bottom
+                    border_chars[7] = "" -- Bottom-left
+                    border_chars[8] = "" -- Left
+                else
+                    -- Remove the right-side connectors
+                    border_chars[4] = "" -- Right
+                    border_chars[5] = "" -- Bottom-right
+                    border_chars[6] = "" -- Bottom
+                end
+            end
+
+            M._diff_win = utils.new_win("float", M._auto_diff_buf, {
+                win_config = {
+                    relative = "win",
+                    win = M._dummy_win,
+                    anchor = anchor,
+                    row = height - 1,
+                    col = col,
+                    width = diff_width,
+                    height = height,
+                    style = "minimal",
+                    border = border_chars,
+                    zindex = 150,
+                },
+            }, false)
+
+            api.nvim_set_option_value("winhl", "Normal:Normal,FloatBorder:WinSeparator", { win = M._diff_win })
+        else
+            M._diff_win = utils.new_win("belowright split", M._auto_diff_buf, { win_config = { height = height } }, false)
+        end
+    end
+
+    api.nvim_win_call(M._tree_win, function()
+        fn.matchadd("AtoneSeqBracket", [=[\v\[\d+\]]=])
+        fn.matchadd("AtoneSeq", [=[\v\[\zs\d+\ze\]]=])
+        fn.matchadd("AtoneMark", [=[\v\{[^}]+\}]=])
+    end)
+    M.refresh()
 end
 
 ---@param stay boolean?
@@ -335,10 +511,12 @@ function M.refresh(stay)
         mark.prune(filepath, tree.nodes)
         local marks_labels = mark.build_labels(filepath)
         local buf_lines = tree.render(marks_labels)
-        if config.opts.layout.width == "adaptive" then
-            api.nvim_win_set_config(_tree_win, { width = fn.strchars(buf_lines[1]) + 5 })
+        utils.set_text(M._tree_buf, buf_lines)
+        resize_tree_window(buf_lines)
+
+        if config.opts.diff_cur_node.width ~= "adaptive" then
+            pos_float_diff_win()
         end
-        utils.set_text(_tree_buf, buf_lines)
 
         if not stay then
             pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
@@ -348,14 +526,16 @@ function M.refresh(stay)
         local id = tree.seq_2id(tree.cur_seq)
         local cur_line = compact and tree.total - id + 1 or (tree.total - id) * 2 + 1
         utils.color_char(
-            _tree_buf,
+            M._tree_buf,
             "AtoneCurrentNode",
             buf_lines[cur_line],
             cur_line,
             tree.nodes[tree.cur_seq].depth * 2 - 1
         )
 
-        update_diff_buf(diff.get_diff_by_seq(M.attach_buf, tree.cur_seq))
+        if config.opts.diff_cur_node.enabled then
+            update_diff_buf(diff.get_diff_by_seq(M.attach_buf, tree.cur_seq))
+        end
     end
 end
 
@@ -375,37 +555,41 @@ function M.show_help()
         help_lines[#help_lines + 1] = lhs .. "\t" .. desc
     end
     max_line = max_line + max_lhs + 4
-    api.nvim_set_option_value("vartabstop", tostring(max_lhs + 4), { buf = _help_buf })
-    utils.set_text(_help_buf, help_lines)
+    api.nvim_set_option_value("vartabstop", tostring(max_lhs + 4), { buf = M._help_buf })
+    utils.set_text(M._help_buf, help_lines)
 
     -- open help window
     local editor_columns = api.nvim_get_option_value("columns", {})
     local editor_lines = api.nvim_get_option_value("lines", {})
-    _float_win = utils.new_win("float", _help_buf, {
-        relative = "editor",
-        row = math.max(0, (editor_lines - #help_lines) / 2),
-        col = math.max(0, (editor_columns - max_line - 1) / 2),
-        width = math.min(editor_columns, max_line + 1),
-        height = math.min(editor_lines, #help_lines),
-        zindex = 150,
-        style = "minimal",
-        border = config.opts.ui.border,
+    M._float_win = utils.new_win("float", M._help_buf, {
+        win_config = {
+            relative = "editor",
+            row = math.max(0, (editor_lines - #help_lines) / 2),
+            col = math.max(0, (editor_columns - max_line - 1) / 2),
+            width = math.min(editor_columns, max_line + 1),
+            height = math.min(editor_lines, #help_lines),
+            zindex = 150,
+            style = "minimal",
+            border = config.opts.ui.border,
+        },
+        autoclose = true,
     })
 end
 
 function M.close()
     if M._show then
         M._show = false
-        pcall(api.nvim_win_close, _tree_win, true)
-        pcall(api.nvim_win_close, _diff_win, true)
-        pcall(api.nvim_win_close, _float_win, true)
+        pcall(api.nvim_win_close, M._tree_win, true)
+        pcall(api.nvim_win_close, M._diff_win, true)
+        pcall(api.nvim_win_close, M._float_win, true)
+        pcall(api.nvim_win_close, M._dummy_win, true)
     end
 end
 
 function M.focus()
     if M._show then
         pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
-        api.nvim_set_current_win(_tree_win)
+        api.nvim_set_current_win(M._tree_win)
     end
 end
 
