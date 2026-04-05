@@ -6,7 +6,7 @@ It simulates a user making a series of changes, occasionally undoing to a
 random previous state before making more changes.
 
 == Usage ==
-nvim --headless -l test/generate_undo_data.lua [num_nodes] [undo_chance] [output_file] [undo_file]
+nvim --headless -l tests/generate_undo_data.lua [num_nodes] [undo_chance] [output_file] [undo_file]
 
 == Parameters ==
 [num_nodes]   (number, optional, default: 10)
@@ -16,36 +16,36 @@ The total number of undo nodes (changes) to generate.
 The probability (between 0.0 and 1.0) of performing a random undo
 before making a new change. A value of 0.3 means a 30% chance.
 
-[output_file] (string, optional, default: "test/random_file.txt")
+[output_file] (string, optional, default: "tests/random_file.txt")
 The path to save the final text file.
 
-[undo_file]   (string, optional, default: "test/random_file.undo")
+[undo_file]   (string, optional, default: "tests/random_file.undo")
 The path to save the generated undo history file.
 
 == Examples ==
 -- Generate a simple history with 20 nodes
-nvim --headless -l test/generate_undo_data.lua 20
+nvim --headless -l tests/generate_undo_data.lua 20
 
 -- Generate a complex history with 100 nodes and a 50% chance of branching
-nvim --headless -l test/generate_undo_data.lua 100 0.5 test/my_file.txt test/my_file.undo
+nvim --headless -l tests/generate_undo_data.lua 100 0.5 tests/my_file.txt tests/my_file.undo
 
 == How to Use for Testing ==
 1. Run the script to generate the files.
-   nvim --headless -l test/generate_undo_data.lua 100
+   nvim --headless -l tests/generate_undo_data.lua 100
 
 2. Open the generated text file in Neovim.
-   nvim test/random_file.txt
+   nvim tests/random_file.txt
 
 3. Load the generated undo history.
-   :rundo test/random_file.undo
+   :rundo tests/random_file.undo
 
 4. Use your undo-tree plugin to view the history. It should be branched.
 --]]
 local arg = arg
 local num_nodes = tonumber(arg and arg[1]) or 10
 local undo_chance = tonumber(arg and arg[2]) or 0.1
-local output_file = (arg and arg[3]) or "test/random_file.txt"
-local undo_file = (arg and arg[4]) or "test/random_file.undo"
+local output_file = (arg and arg[3]) or "tests/random_file.txt"
+local undo_file = (arg and arg[4]) or "tests/random_file.undo"
 
 print("Generating test data...")
 print("  Number of undo nodes: " .. num_nodes)

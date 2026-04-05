@@ -1,0 +1,54 @@
+name: Tests & Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  stylua:
+    name: StyLua Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check formatting with StyLua
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check .
+
+  test:
+    name: Run Tests (${{ matrix.neovim_version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        neovim_version: [stable, nightly]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim_version }}
+
+      - name: Install plenary.nvim
+        run: |
+          git clone --depth=1 https://github.com/nvim-lua/plenary.nvim \
+            ~/.local/share/nvim/lazy/plenary.nvim
+
+      - name: Run Tests
+        run: |
+          nvim --headless --clean -u tests/minimal_init.lua \
+            -c "PlenaryBustedDirectory tests/ {minimal_init = 'tests/minimal_init.lua'}" \
+            -c "qa!"
+        timeout-minutes: 5

@@ -1,18 +1,44 @@
 local api = vim.api
 local config = require("atone.config")
 local core = require("atone.core")
+local utils = require("atone.utils")
 local M = {}
 
 local highlights = {
     Seq = { link = "Number" },
     CurrentNode = { link = "Keyword" },
     SeqBracket = { link = "Comment" },
+    Mark = { link = "BookmarkSign" },
+    DiffAdd = { link = "DiffAdd" },
+    DiffDelete = { link = "DiffDelete" },
+    DiffAddInline = { source = "DiffAdd" },
+    DiffDeleteInline = { source = "DiffDelete" },
 }
+
+---@param source string
+---@return table
+local function build_inline_highlight(source)
+    local hl = api.nvim_get_hl(0, { name = source, link = false })
+    local bg = hl.bg
+    if not bg then
+        return { link = "DiffText" }
+    end
+
+    return {
+        fg = hl.fg,
+        bg = vim.o.background == "light" and utils.darken(bg, 0.15) or utils.lighten(bg, 0.15),
+        bold = hl.bold,
+        italic = hl.italic,
+        underline = hl.underline,
+    }
+end
 
 local function set_highlights()
     for suffix, hi_value in pairs(highlights) do
         local hi_name = "Atone" .. suffix
-        if vim.tbl_isempty(api.nvim_get_hl(0, { name = hi_name })) then
+        if hi_value.source then
+            api.nvim_set_hl(0, hi_name, build_inline_highlight(hi_value.source))
+        elseif vim.tbl_isempty(api.nvim_get_hl(0, { name = hi_name })) then
             api.nvim_set_hl(0, hi_name, hi_value)
         end
     end
@@ -56,6 +82,10 @@ function M.setup(user_opts)
     user_opts = user_opts or {}
     config.merge_config(user_opts)
 
+    if config.opts.marks.persist then
+        require("atone.mark").load()
+    end
+
     api.nvim_create_user_command("Atone", atone_cmd, {
         nargs = "*",
         complete = function(arg_lead, cmdline, _)
@@ -87,6 +117,16 @@ function M.setup(user_opts)
     api.nvim_create_autocmd("ColorScheme", {
         group = core.augroup,
         callback = set_highlights,
+    })
+    api.nvim_create_autocmd("OptionSet", {
+        group = core.augroup,
+        pattern = "background",
+        callback = set_highlights,
+    })
+    api.nvim_create_autocmd("OptionSet", {
+        group = core.augroup,
+        pattern = "diffopt",
+        callback = require("atone.diff").invalidate_diffopt_cache,
     })
     api.nvim_create_autocmd({ "TextChanged", "InsertLeave" }, {
         group = core.augroup,

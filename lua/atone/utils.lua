@@ -19,47 +19,50 @@ end
 --- create a new window
 ---@param mode string `float` or a command passed to the `vim.cmd()`
 ---@param buf integer
----@param config table?
+---@param config { win_config?: table, autoclose?: boolean }?
 ---@param enter boolean? defaults to true
 function M.new_win(mode, buf, config, enter)
     if enter == nil then
         enter = true
     end
     config = config or {}
-    local win
     local win_opts = {
         number = false,
         relativenumber = false,
         list = false,
         winfixbuf = true,
         winfixwidth = true,
+        winfixheight = true,
         wrap = false,
     }
 
+    local win
+
     if mode == "float" then
-        win = api.nvim_open_win(buf, enter, config)
-        -- close float window after leaving it
-        local au
-        au = api.nvim_create_autocmd("WinLeave", {
-            callback = function()
-                if api.nvim_get_current_win() == win then
-                    pcall(vim.api.nvim_win_close, win, true)
-                    api.nvim_del_autocmd(au)
-                elseif not vim.api.nvim_win_is_valid(win) then
-                    api.nvim_del_autocmd(au)
-                end
-            end,
-            once = true,
-            nested = true,
-        })
+        win = api.nvim_open_win(buf, enter, config.win_config or {})
+        if config.autoclose then
+            local au
+            au = api.nvim_create_autocmd("WinLeave", {
+                callback = function()
+                    if api.nvim_get_current_win() == win then
+                        pcall(vim.api.nvim_win_close, win, true)
+                        api.nvim_del_autocmd(au)
+                    elseif not vim.api.nvim_win_is_valid(win) then
+                        api.nvim_del_autocmd(au)
+                    end
+                end,
+                once = true,
+                nested = true,
+            })
+        end
     else
-        local cur = api.nvim_get_current_win()
+        local last_win = api.nvim_get_current_win()
         vim.cmd(mode .. " +buffer" .. buf)
         win = api.nvim_get_current_win()
         if not enter then
-            api.nvim_set_current_win(cur)
+            api.nvim_set_current_win(last_win)
         end
-        vim.api.nvim_win_set_config(win, config)
+        api.nvim_win_set_config(win, config.win_config or {})
     end
 
     for option, value in pairs(win_opts) do
@@ -107,11 +110,86 @@ end
 ---@param higroup string
 ---@param line string
 ---@param lnum integer
----@param column integer
+---@param column integer 1-based character column
 function M.color_char(buf, higroup, line, lnum, column)
     local start_byte = vim.str_byteindex(line, "utf-16", column - 1) + 1
     local end_byte = vim.str_byteindex(line, "utf-16", column)
     vim.hl.range(buf, api.nvim_create_namespace("atone"), higroup, { lnum - 1, start_byte - 1 }, { lnum - 1, end_byte - 1 })
+end
+
+---@param color integer
+---@param amount number
+---@return integer
+function M.lighten(color, amount)
+    local r = math.floor(color / 0x10000) % 0x100
+    local g = math.floor(color / 0x100) % 0x100
+    local b = color % 0x100
+
+    r = math.floor(r + (0xFF - r) * amount)
+    g = math.floor(g + (0xFF - g) * amount)
+    b = math.floor(b + (0xFF - b) * amount)
+
+    return r * 0x10000 + g * 0x100 + b
+end
+
+---@param color integer
+---@param amount number
+---@return integer
+function M.darken(color, amount)
+    local r = math.floor(color / 0x10000) % 0x100
+    local g = math.floor(color / 0x100) % 0x100
+    local b = color % 0x100
+
+    r = math.floor(r * (1 - amount))
+    g = math.floor(g * (1 - amount))
+    b = math.floor(b * (1 - amount))
+
+    return r * 0x10000 + g * 0x100 + b
+end
+
+--- Return the UTF-16 code-unit index of the character that contains byte_pos.
+--- Corrects for the case where str_utfindex points to the *next* character
+--- when byte_pos falls in the middle of a multi-byte sequence.
+---@param text string
+---@param byte_pos integer 0-based byte index (caller guarantees 0 < byte_pos < #text)
+---@return integer UTF-16 code-unit index
+local function char_utf16_idx(text, byte_pos)
+    local idx = vim.str_utfindex(text, "utf-16", byte_pos)
+    -- If the byte start of `idx` is already past byte_pos, we overshot by one.
+    if vim.str_byteindex(text, "utf-16", idx) > byte_pos then
+        idx = idx - 1
+    end
+    return idx
+end
+
+--- Snap a 0-based byte position to the start of the UTF-8 character that contains it.
+--- Input and output are both 0-based byte positions.
+---@param text string
+---@param byte_pos integer 0-based byte index
+---@return integer
+function M.char_byte_start(text, byte_pos)
+    if byte_pos <= 0 then
+        return 0
+    end
+    if byte_pos >= #text then
+        return #text
+    end
+    return vim.str_byteindex(text, "utf-16", char_utf16_idx(text, byte_pos))
+end
+
+--- Snap a 0-based byte position to the exclusive end of the UTF-8 character
+--- that contains it.  Input and output are both 0-based byte positions.
+---@param text string
+---@param byte_pos integer 0-based byte index
+---@return integer
+function M.char_byte_end(text, byte_pos)
+    if byte_pos < 0 then
+        return 0
+    end
+    if byte_pos >= #text then
+        return #text
+    end
+    return vim.str_byteindex(text, "utf-16", char_utf16_idx(text, byte_pos) + 1)
 end
 
 --- Returns how long ago (from now) a given timestamp was.
@@ -149,6 +227,18 @@ function M.cache(f)
         end
         return cache[encoded_key]
     end
+end
+
+---@param win integer
+---@return boolean
+function M.win_exists(win)
+    return win and api.nvim_win_is_valid(win)
+end
+
+---@param buf integer
+---@return string
+function M.buf_filepath(buf)
+    return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":p")
 end
 
 return M

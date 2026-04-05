@@ -1,0 +1,42 @@
+name: vimdoc
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.XXIAOA_GITHUB_PAT }}
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: v0.11.3
+      - name: Setup treesitter
+        run: |
+          mkdir -p ~/.local/share/nvim/site/pack/vendor/start
+          git clone --depth 1 https://github.com/ibhagwan/ts-vimdoc.nvim ~/.local/share/nvim/site/pack/vendor/start/ts-vimdoc.nvim
+          git clone --depth 1 https://github.com/nvim-treesitter/nvim-treesitter ~/.local/share/nvim/site/pack/vendor/start/nvim-treesitter
+      - name: Build parser
+        run: |
+          export PACKPATH=$HOME/.local/share/nvim/site
+          nvim --headless -u ~/.local/share/nvim/site/pack/vendor/start/ts-vimdoc.nvim/scripts/init.lua -c "TSUpdateSync markdown" -c "TSUpdateSync markdown_inline" -c "qa"
+      - name: Generating docs
+        run: |
+          export PATH="${PWD}/build/:${PATH}"
+          export PACKPATH=$HOME/.local/share/nvim/site
+          nvim --headless -u ~/.local/share/nvim/site/pack/vendor/start/ts-vimdoc.nvim/scripts/init.lua  -c "lua require('ts-vimdoc').docgen({input_file='README.md', output_file='doc/atone.txt', project_name='atone', version='For Neovim >= 0.11.3'})" -c "qa"
+      - name: Commit changes
+        env:
+          COMMIT_MSG: |
+            [docgen] CI: autogenerate vimdoc [skip ci]
+        run: |
+          git config user.email "actions@github"
+          git config user.name "Github Actions"
+          git add doc/atone.txt
+          # Only commit and push if we have changes
+          git diff --quiet && git diff --staged --quiet || (git commit -m "${COMMIT_MSG}"; git push origin HEAD:${GITHUB_REF})
