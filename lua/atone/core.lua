@@ -352,13 +352,21 @@ local function init()
         callback = M.close,
     })
 
+    -- For extmarks node label
+    api.nvim_create_autocmd({ "WinResized", "WinScrolled" }, {
+        group = M.augroup,
+        buffer = M._tree_buf,
+        callback = function()
+            tree.render()
+        end,
+    })
+
     if not _resize_autocmd_registered then
         api.nvim_create_autocmd("WinResized", {
             group = M.augroup,
             callback = function()
                 if M._show then
                     vim.schedule(function()
-                        M.refresh(true)
                         pos_float_diff_win()
                     end)
                 end
@@ -366,6 +374,7 @@ local function init()
         })
         _resize_autocmd_registered = true
     end
+
     -- register keymaps
     local keymaps_conf = config.opts.keymaps
     for action, lhs in pairs(keymaps_conf.tree) do
@@ -599,14 +608,6 @@ function M.toggle()
     else
         M.open()
     end
-end
-
-function M.get_tree_buf()
-    return _tree_buf
-end
-
-function M.get_tree_winid()
-    return _tree_win
 end
 
 return M

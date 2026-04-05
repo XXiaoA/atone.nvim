@@ -83,9 +83,9 @@ local function get_node_label(node)
             ---@type AtoneNode.Label.Ctx.Diff
             local diff_stats = { added = 0, removed = 0 }
             vim.iter(diff_patch):each(function(line)
-                if line:find("^-") ~= nil then
+                if line:find("^+") ~= nil then
                     diff_stats.added = diff_stats.added + 1
-                elseif line:find("^+") ~= nil then
+                elseif line:find("^-") ~= nil then
                     diff_stats.removed = diff_stats.removed + 1
                 end
             end)
@@ -375,9 +375,8 @@ function M.render(marks_labels)
 
     local label_col = max_depth * 2 + 4
     local core = require("atone.core")
-    local tree_winid = core.get_tree_winid()
 
-    local wininfo = fn.getwininfo(tree_winid)[1]
+    local wininfo = fn.getwininfo(core._tree_win)[1]
     local topline = wininfo.topline or 1
     local botline = wininfo.topline + wininfo.height + 2
 
@@ -415,15 +414,14 @@ end
 api.nvim_set_decoration_provider(extmark_meta.ns, {
     on_win = function(_, winid, bufnr, toprow, botrow)
         local core = require("atone.core")
-        local tree_buf = core.get_tree_buf()
-        if tree_buf ~= bufnr or tree_buf == nil then
+        if core._tree_buf ~= bufnr or core._tree_buf == nil then
             return
         end
         if vim.tbl_isempty(extmark_meta.items) then
             return
         end
 
-        api.nvim_buf_clear_namespace(tree_buf, extmark_meta.ns, 0, -1)
+        api.nvim_buf_clear_namespace(core._tree_buf, extmark_meta.ns, 0, -1)
 
         for lnum = math.max(toprow - 1, 0), botrow do
             local label = extmark_meta.items[lnum]

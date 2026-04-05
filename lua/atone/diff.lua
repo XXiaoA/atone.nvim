@@ -97,17 +97,16 @@ function M.get_diff(ctx1, ctx2)
     return vim.split(result, "\n")
 end
 
----@param bufnr integer
----@param child integer
----@param parent? integer
-function M.get_diff_by_seq(bufnr, child, parent)
-    local parent_ctx
-    if parent then
-        parent_ctx = M.get_context_by_seq(bufnr, parent)
-    else
-        parent_ctx = {}
-    end
-    return M.get_diff(M.get_context_by_seq(bufnr, child), parent_ctx)
+--- Get the diff between a node and its parent
+---@param buf integer
+---@param seq integer
+---@return string[]
+function M.get_diff_by_seq(buf, seq)
+    local tree = require("atone.tree")
+    local parent_seq = tree.nodes[seq].parent or -1
+    local parent_ctx = M.get_context_by_seq(buf, parent_seq)
+    local child_ctx = M.get_context_by_seq(buf, seq)
+    return M.get_diff(parent_ctx, child_ctx)
 end
 
 --- Run `vim.diff()` in `indices` mode and normalize the result into named keys.
@@ -126,6 +125,7 @@ local function byte_diff(old_text, new_text, diff_opts)
     end
 
     local hunks = {}
+    ---@diagnostic disable-next-line: param-type-mismatch
     for _, hunk in ipairs(result) do
         hunks[#hunks + 1] = {
             old_start = hunk[1],
@@ -334,6 +334,7 @@ function M.compute_intra_hunks(hunk_lines)
     local all_add, all_del = {}, {}
 
     for _, group in ipairs(groups) do
+        ---@diagnostic disable-next-line: param-type-mismatch
         local del_spans, add_spans = diff_group_native(group, diff_opts)
         vim.list_extend(all_del, del_spans)
         vim.list_extend(all_add, add_spans)
@@ -348,4 +349,5 @@ function M.compute_intra_hunks(hunk_lines)
         del_spans = all_del,
     }
 end
+
 return M
