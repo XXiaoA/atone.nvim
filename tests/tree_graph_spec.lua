@@ -38,7 +38,9 @@ local function render_custom_line(file, undo_file, line_nr, formatter)
     local core = require("atone.core")
     local mark = require("atone.mark")
     local result
-    atone.setup({ ui = { compact = false, node_label = { custom = true, formatter = formatter, extmark_opts = { strict = false } } } })
+    atone.setup({
+        ui = { compact = false, node_label = { custom = true, formatter = formatter, extmark_opts = { strict = false } } },
+    })
 
     local buf = utils.new_buf()
     api.nvim_buf_call(buf, function()
