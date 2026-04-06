@@ -7,7 +7,7 @@ local get_diff_by_seq_cached = utils.cache(get_diff_by_seq)
 local get_diff_stats_cached = utils.cache(function(bufnr, seq)
     local diff_patch = get_diff_by_seq_cached(bufnr, seq)
 
-    ---@type AtoneNode.Label.Ctx.Diff
+    ---@type AtoneNodeLabelContextDiff
     local diff_stats = { added = 0, removed = 0 }
     for _, line in ipairs(diff_patch) do
         local prefix = line:sub(1, 1)
@@ -42,28 +42,6 @@ local function set_char_at(str, pos, ch)
     end
 end
 
----@class AtoneNode
----@field seq integer
----@field time integer?
----@field depth integer
----@field parent integer?
----@field children integer[]
----@field child integer?
----@field fork boolean?
----@field label string|table|nil
-
----@class AtoneNode.Label.Ctx.Diff
----@field added integer
----@field removed integer
-
----@class AtoneNode.Label.Ctx
----@field seq integer
----@field is_current boolean
----@field time integer
----@field h_time string Time in a human-readable format
----@field bookmark string? Bookmark label text built by `mark.build_labels`
----@field diff AtoneNode.Label.Ctx.Diff Diff statistics
-
 local M = {
     attach_buf = nil,
     ---@type table<integer, AtoneNode>
@@ -92,6 +70,7 @@ local function get_h_time(node)
 end
 
 ---@param node AtoneNode
+---@return AtoneNodeLabel
 local function get_node_label(node)
     local ctx = {
         seq = node.seq,
@@ -124,6 +103,7 @@ local function get_node_label(node)
         return tostring(label)
     end
 
+    ---@type AtoneNodeLabelChunk[]
     local items = {}
     for _, item in ipairs(label) do
         if type(item) == "table" then

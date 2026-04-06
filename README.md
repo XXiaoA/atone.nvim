@@ -34,7 +34,9 @@ You can install `atone.nvim` using your favorite plugin manager. Here comes a ex
 {
     "XXiaoA/atone.nvim",
     cmd = "Atone",
-    opts = {}, -- your configuration here
+    ---@module "atone"
+    ---@type AtoneConfig
+    opts = {},
 }
 ```
 
@@ -58,7 +60,7 @@ require("atone").setup({
     layout = {
         ---@type "left"|"right"
         direction = "left",
-        ---@type "adaptive"|integer|number
+        ---@type "adaptive"|number
         --- adaptive: adapt to width of tree graph
         --- float < 1: width = vim.o.columns * value
         --- integer >= 1: absolute width
@@ -68,7 +70,6 @@ require("atone").setup({
     -- shown under the tree graph
     diff_cur_node = {
         enabled = true,
-        ---@type number float less than 1
         --- The diff window's height is set to a specified percentage of the original (namely tree graph) window's height.
         split_percent = 0.3,
         ---@type "adaptive"|number
@@ -92,9 +93,7 @@ require("atone").setup({
     },
     marks = {
         persist = true,
-        ---@type string
         persist_path = vim.fn.stdpath("data") .. "/atone_marks.json",
-        ---@type string[]
         --- finders are tried in order. "builtin" is always available.
         finders = { "fzf-lua", "telescope", "builtin" },
     },
@@ -128,8 +127,8 @@ require("atone").setup({
         compact = false,
         node_label = {
             custom = false,
-            ---@param ctx AtoneNode.Label.Ctx
-            ---@return string|[string, string][]
+            ---@param ctx AtoneNodeLabelContext
+            ---@return AtoneNodeLabel
             formatter = function(ctx)
                 return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
             end,
@@ -148,6 +147,8 @@ require("atone").setup({
     ui = {
         node_label = {
             custom = true,
+            ---@param ctx AtoneNodeLabelContext
+            ---@return AtoneNodeLabel
             formatter = function(ctx)
                 return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
             end,

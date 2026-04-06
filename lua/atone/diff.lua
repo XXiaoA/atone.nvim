@@ -14,19 +14,6 @@ local _diffopt_cache = nil
 -- The flow: vim.diff (1-based) → line_to_orig (0-based) → char_byte_start/end
 --           → AtoneCharSpan (0-based exclusive) → caller adds col_offset → extmark
 
----@class AtoneCharSpan
----@field line integer 1-based line index within the hunk body
----@field col_start integer 0-based column (inclusive)
----@field col_end integer 0-based column (exclusive)
-
----@class AtoneIntraChanges
----@field add_spans AtoneCharSpan[]
----@field del_spans AtoneCharSpan[]
-
----@class AtoneChangeGroup
----@field del_lines {idx: integer, text: string}[]
----@field add_lines {idx: integer, text: string}[]
-
 --- Read `diffopt` once and cache the result. Invalidated when `diffopt` changes.
 ---@return {algorithm?: string, linematch?: integer}
 local function parse_diffopt()

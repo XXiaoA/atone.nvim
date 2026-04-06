@@ -44,10 +44,6 @@ local function set_highlights()
     end
 end
 
----@class AtoneCmdSubcommand
----@field impl fun(args:string[], opts: table) The command implementation
----@field complete? fun(subcmd_arg_lead: string): string[] (optional) Command completions callback, taking the lead of the subcommand's arguments
-
 ---@type table<string, AtoneCmdSubcommand>
 local subcommand_tbl = {
     toggle = {
@@ -78,6 +74,7 @@ local function atone_cmd(opts)
     subcommand.impl(args, opts)
 end
 
+---@param user_opts? AtoneConfig
 function M.setup(user_opts)
     user_opts = user_opts or {}
     config.merge_config(user_opts)
