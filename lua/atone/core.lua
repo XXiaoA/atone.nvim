@@ -352,6 +352,20 @@ local function init()
         callback = M.close,
     })
 
+    api.nvim_create_autocmd({ "WinScrolled", "WinResized" }, {
+        buffer = M._tree_buf,
+        group = M.augroup,
+        callback = function()
+            if not config.opts.ui.node_label.custom then
+                return
+            end
+            if not M._show or not (utils.win_exists(M._tree_win) and api.nvim_buf_is_valid(M._tree_buf)) then
+                return
+            end
+            tree.render_visible_labels(M._tree_buf, M._tree_win)
+        end,
+    })
+
     if not _resize_autocmd_registered then
         api.nvim_create_autocmd("WinResized", {
             group = M.augroup,
@@ -495,11 +509,13 @@ function M.open()
         end
     end
 
-    api.nvim_win_call(M._tree_win, function()
-        fn.matchadd("AtoneSeqBracket", [=[\v\[\d+\]]=])
-        fn.matchadd("AtoneSeq", [=[\v\[\zs\d+\ze\]]=])
-        fn.matchadd("AtoneMark", [=[\v\{[^}]+\}]=])
-    end)
+    if not config.opts.ui.node_label.custom then
+        api.nvim_win_call(M._tree_win, function()
+            fn.matchadd("AtoneSeqBracket", [=[\v\[\d+\]]=])
+            fn.matchadd("AtoneSeq", [=[\v\[\zs\d+\ze\]]=])
+            fn.matchadd("AtoneMark", [=[\v\{[^}]+\}]=])
+        end)
+    end
     M.refresh()
 end
 
@@ -512,6 +528,9 @@ function M.refresh(stay)
         local marks_labels = mark.build_labels(filepath)
         local buf_lines = tree.render(marks_labels)
         utils.set_text(M._tree_buf, buf_lines)
+        if config.opts.ui.node_label.custom then
+            tree.render_visible_labels(M._tree_buf, M._tree_win)
+        end
         resize_tree_window(buf_lines)
 
         if config.opts.diff_cur_node.width ~= "adaptive" then

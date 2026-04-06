@@ -1,6 +1,25 @@
 local api, fn = vim.api, vim.fn
 local config = require("atone.config")
-local time_ago = require("atone.utils").time_ago
+local utils = require("atone.utils")
+
+local get_diff_by_seq = require("atone.diff").get_diff_by_seq
+local get_diff_by_seq_cached = utils.cache(get_diff_by_seq)
+local get_diff_stats_cached = utils.cache(function(bufnr, seq)
+    local diff_patch = get_diff_by_seq_cached(bufnr, seq)
+
+    ---@type AtoneNode.Label.Ctx.Diff
+    local diff_stats = { added = 0, removed = 0 }
+    for _, line in ipairs(diff_patch) do
+        local prefix = line:sub(1, 1)
+        if prefix == "+" then
+            diff_stats.added = diff_stats.added + 1
+        elseif prefix == "-" then
+            diff_stats.removed = diff_stats.removed + 1
+        end
+    end
+
+    return diff_stats
+end)
 
 --- Get the character at column `col` (1-based character index).
 ---@param line string
@@ -25,21 +44,142 @@ end
 
 ---@class AtoneNode
 ---@field seq integer
----@field time integer
+---@field time integer?
 ---@field depth integer
----@field parent integer
+---@field parent integer?
 ---@field children integer[]
----@field child integer
+---@field child integer?
 ---@field fork boolean?
+---@field label string|table|nil
+
+---@class AtoneNode.Label.Ctx.Diff
+---@field added integer
+---@field removed integer
+
+---@class AtoneNode.Label.Ctx
+---@field seq integer
+---@field is_current boolean
+---@field time integer
+---@field h_time string Time in a human-readable format
+---@field bookmark string? Bookmark label text built by `mark.build_labels`
+---@field diff AtoneNode.Label.Ctx.Diff Diff statistics
 
 local M = {
-    ---@type AtoneNode[]
-    nodes = {}, -- { seq: node }
+    attach_buf = nil,
+    ---@type table<integer, AtoneNode>
+    --- { seq: node } mapping
+    nodes = {},
     lines = {},
+    -- Maps rendered tree line numbers back to undo seq so visible-label refresh can
+    -- update only the rows that actually contain nodes.
+    lnum_to_seq = {},
+    marks_labels = {},
     total = 1,
     last_seq = 0,
     cur_seq = 0,
 }
+
+local extmark_meta = {
+    col = nil,
+    ns = api.nvim_create_namespace("atone_tree_label"),
+    topline = nil,
+    botline = nil,
+}
+---@param node AtoneNode
+---@return string
+local function get_h_time(node)
+    return node.seq > 0 and node.time ~= nil and utils.time_ago(node.time) or "Original"
+end
+
+---@param node AtoneNode
+local function get_node_label(node)
+    local ctx = {
+        seq = node.seq,
+        is_current = node.seq == M.cur_seq,
+        time = node.time,
+        h_time = get_h_time(node),
+        bookmark = M.marks_labels[node.seq],
+        diff = function()
+            return get_diff_stats_cached(M.attach_buf, node.seq)
+        end,
+    }
+
+    -- Keep `diff` lazy so simple formatters don't pay for reconstructing undo snapshots.
+    local label = config.opts.ui.node_label.formatter(setmetatable({}, {
+        __index = function(_, k)
+            ---@type boolean|string|integer|function
+            local val = ctx[k]
+            if type(val) == "function" then
+                -- allows on-demand of the diff stats
+                val = val() ---@cast val -function
+            end
+            return val
+        end,
+    }))
+
+    if type(label) == "string" then
+        return label
+    end
+    if type(label) ~= "table" then
+        return tostring(label)
+    end
+
+    local items = {}
+    for _, item in ipairs(label) do
+        if type(item) == "table" then
+            items[#items + 1] = { tostring(item[1]), item[2] or "Normal" }
+        else
+            items[#items + 1] = { tostring(item), "Normal" }
+        end
+    end
+    return items
+end
+
+---@param lnum integer
+---@return string, {start_col: integer, end_col: integer, hl_group: string}[]?
+local function build_display_line(lnum)
+    local line = M.lines[lnum] or ""
+    local seq = M.lnum_to_seq[lnum]
+    if seq == nil then
+        return line, nil
+    end
+
+    local node = M.nodes[seq]
+    if not node then
+        return line, nil
+    end
+
+    local label = node.label or get_node_label(node)
+    node.label = label
+    if type(label) == "string" then
+        return set_char_at(line, extmark_meta.col, label), nil
+    end
+
+    -- Chunk labels are flattened into buffer text first, then highlighted with
+    -- extmark ranges. That avoids depending on virt_text for the label itself.
+    local parts = {}
+    for _, chunk in ipairs(label) do
+        parts[#parts + 1] = chunk[1]
+    end
+    local display_line = set_char_at(line, extmark_meta.col, table.concat(parts))
+    local spans = {}
+    local col_offset = 0
+    for _, chunk in ipairs(label) do
+        local text = chunk[1]
+        local hl_group = chunk[2]
+        local width = fn.strchars(text)
+        if hl_group and hl_group ~= "" and hl_group ~= "Normal" and width > 0 then
+            spans[#spans + 1] = {
+                start_col = vim.str_byteindex(display_line, "utf-16", extmark_meta.col - 1 + col_offset),
+                end_col = vim.str_byteindex(display_line, "utf-16", extmark_meta.col - 1 + col_offset + width),
+                hl_group = hl_group,
+            }
+        end
+        col_offset = col_offset + width
+    end
+
+    return display_line, spans
+end
 
 local seqs -- { id: seq }
 local ids -- { seq: id }
@@ -67,6 +207,7 @@ function M.change_branch_depth(node_seq, new_depth_baseline)
 end
 
 function M.convert(buf)
+    M.attach_buf = buf
     local undotree = fn.undotree(buf)
 
     -- initiate
@@ -188,8 +329,11 @@ end
 -- o    [0]   1    9
 function M.render(marks_labels)
     marks_labels = marks_labels or {}
+    M.marks_labels = marks_labels
     M.lines = {}
+    M.lnum_to_seq = {}
     local max_depth = 1
+
     seqs = { 0 }
     -- the order number of node. Root node's id is 1
     local id = 1
@@ -220,11 +364,9 @@ function M.render(marks_labels)
     M.total = total
 
     local compact = config.opts.ui.compact
-    if compact then
-        M.lines[total] = "●"
-    else
-        M.lines[2 * total - 1] = "●"
-    end
+    local root_lnum = compact and total or 2 * total - 1
+    M.lines[root_lnum] = "●"
+    M.lnum_to_seq[root_lnum] = 0
     id = 2
     while id <= total do
         local seq = seqs[id]
@@ -232,6 +374,7 @@ function M.render(marks_labels)
         local depth = node.depth
         local parent_depth = M.nodes[node.parent].depth
         local node_lnum = compact and total - id + 1 or (total - id) * 2 + 1
+        M.lnum_to_seq[node_lnum] = seq
         if depth == 1 then
             M.lines[node_lnum] = "●"
         else
@@ -292,28 +435,106 @@ function M.render(marks_labels)
         id = id + 1
     end
 
-    -- TODO: use extmarks
-    do
-        for i = 1, total do
-            local lnum = compact and total - i + 1 or (total - i) * 2 + 1
-            local seq = M.id_2seq(i)
-            local node = M.nodes[seq]
-            local time
-            if node.time then
-                time = time_ago(node.time)
-            else
-                time = "Original"
-            end
+    local label_col = max_depth * 2 + 4
+    extmark_meta.col = label_col
+    extmark_meta.topline = nil
+    extmark_meta.botline = nil
 
-            local target_index = max_depth * 2 + 4
-            local label = marks_labels[seq]
-            local label_suffix = label and label or ""
-            local content = string.format("[%s] %s %s", seq, time, label_suffix)
-            M.lines[lnum] = set_char_at(M.lines[lnum], target_index, content)
+    if not config.opts.ui.node_label.custom then
+        for i = 1, total do
+            local seq = M.id_2seq(i)
+            local lnum = compact and total - i + 1 or (total - i) * 2 + 1
+            local node = M.nodes[seq]
+            M.lines[lnum] = set_char_at(
+                M.lines[lnum],
+                label_col,
+                string.format("[%s] %s %s", seq, get_h_time(node), marks_labels[seq] or "")
+            )
         end
     end
 
     return M.lines
+end
+
+---@param bufnr integer
+---@param winid integer
+function M.render_visible_labels(bufnr, winid)
+    if not config.opts.ui.node_label.custom then
+        return
+    end
+    if not bufnr or not api.nvim_buf_is_valid(bufnr) then
+        return
+    end
+
+    if not winid or not api.nvim_win_is_valid(winid) then
+        return
+    end
+
+    local wininfo = fn.getwininfo(winid)[1]
+    if not wininfo then
+        return
+    end
+
+    local topline = wininfo.topline or 1
+    local botline = wininfo.botline or (topline + (wininfo.height or api.nvim_win_get_height(winid)) - 1)
+    topline = math.max(1, topline)
+    botline = math.min(botline, #M.lines)
+    if topline > botline then
+        return
+    end
+
+    -- If the new viewport stays inside the last painted range, the existing label
+    -- text is still valid and we can skip touching the buffer.
+    if
+        extmark_meta.topline
+        and extmark_meta.botline
+        and topline >= extmark_meta.topline
+        and botline <= extmark_meta.botline
+    then
+        return
+    end
+
+    if extmark_meta.topline and extmark_meta.botline and extmark_meta.topline <= extmark_meta.botline then
+        local lines = {}
+        for lnum = extmark_meta.topline, extmark_meta.botline do
+            lines[#lines + 1] = M.lines[lnum] or ""
+        end
+        utils.set_text(bufnr, lines, extmark_meta.topline - 1, extmark_meta.botline)
+    end
+    api.nvim_buf_clear_namespace(bufnr, extmark_meta.ns, 0, -1)
+
+    extmark_meta.topline = topline
+    extmark_meta.botline = botline
+
+    local visible_lines = {}
+    local row_spans = {}
+    for lnum = topline, botline do
+        local line, spans = build_display_line(lnum)
+        visible_lines[#visible_lines + 1] = line
+        if spans and #spans > 0 then
+            row_spans[#row_spans + 1] = { row = lnum - 1, spans = spans }
+        end
+    end
+    utils.set_text(bufnr, visible_lines, topline - 1, botline)
+
+    -- In custom mode extmarks only carry highlight ranges. The label text itself
+    -- stays in the buffer so scrolling updates are just normal line writes.
+    for _, row_data in ipairs(row_spans) do
+        for _, span in ipairs(row_data.spans) do
+            api.nvim_buf_set_extmark(
+                bufnr,
+                extmark_meta.ns,
+                row_data.row,
+                span.start_col,
+                vim.tbl_extend("force", config.opts.ui.node_label.extmark_opts or {}, {
+                    end_row = row_data.row,
+                    end_col = span.end_col,
+                    hl_group = span.hl_group,
+                    strict = false,
+                })
+            )
+        end
+    end
 end
 
 return M
