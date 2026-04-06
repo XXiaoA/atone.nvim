@@ -15,7 +15,7 @@
                 <img alt="License" src="https://img.shields.io/github/license/XXiaoA/atone.nvim?color=%23DDB6F2&label=LICENSE&logo=codesandbox&style=for-the-badge&logoColor=D9E0EE&labelColor=302D41"/></a>
 </p>
 
-<img width="2536" height="1518" alt="Image" src="https://github.com/user-attachments/assets/2ed40e9a-c3da-49c6-888c-697aa4b391c8" />
+<img width="1045" height="622" alt="Image" src="https://github.com/user-attachments/assets/c0aca002-9404-418d-acbf-78e6c4e2c5a0" />
 
 ## Features
 
