@@ -1,4 +1,4 @@
-*atone.txt*           For Neovim >= 0.11.3          Last change: 2026 April 05
+*atone.txt*           For Neovim >= 0.11.3          Last change: 2026 April 06
 
 ==============================================================================
 Table of Contents                                    *atone-table-of-contents*
@@ -7,6 +7,7 @@ Features .................................................... |atone-features|
 Installation ............................................ |atone-installation|
 Commands .................................................... |atone-commands|
 Configuration .......................................... |atone-configuration|
+Custom Labels .......................................... |atone-custom-labels|
 Keymap Actions ........................................ |atone-keymap-actions|
 Highlighting ............................................ |atone-highlighting|
 Credits ...................................................... |atone-credits|
@@ -133,9 +134,85 @@ Here are the default options:
             border = "single",
             -- compact graph style
             compact = false,
+            node_label = {
+                custom = false,
+                ---@param ctx AtoneNode.Label.Ctx
+                ---@return string|[string, string][]
+                formatter = function(ctx)
+                    return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
+                end,
+                extmark_opts = { strict = false },
+            },
         },
     })
 <
+
+                                                                              
+CUSTOM LABELS                                            *atone-custom-labels*
+
+The tree uses the built-in label format by default. If you want full control
+over the label, turn on `ui.node_label.custom` and provide a `formatter(ctx)`.
+
+>lua
+    require("atone").setup({
+        ui = {
+            node_label = {
+                custom = true,
+                formatter = function(ctx)
+                    return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
+                end,
+            },
+        },
+    })
+<
+Available fields on `ctx`:
+
+| Field        | Type                                   | Description                                 |
+| ---          | ---                                    | ---                                         |
+| `seq`        | `integer`                              | Undo sequence number of the node            |
+| `is_current` | `boolean`                              | Whether this node is the current undo state |
+| `time`       | `integer`                              | Raw timestamp from Neovim's undotree        |
+| `h_time`     | `string`                               | Human-readable time string                  |
+| `bookmark`   | `string?`                              | Bookmark label text, e.g. `{a}`             |
+| `diff`       | `{ added: integer, removed: integer }` | Added/removed line counts for the node      |
+
+Things to know:
+
+- Fixed labels (`custom = false`) are built for the whole tree when the tree
+  is refreshed.
+- Custom labels only write label text for the visible part of the tree.
+- When the viewport moves, the old visible range is restored to the plain
+  graph text and the new visible range gets fresh label text.
+- Highlight groups returned by chunked labels are applied only for the
+  currently visible label range.
+- Fixed-label highlighting is not used in custom mode. If you want highlighted
+  custom labels, return highlighted chunks.
+You may return either a plain string or a list of text chunks.
+
+Plain string example:
+
+>lua
+    formatter = function(ctx)
+        return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
+    end
+<
+Chunked example with per-segment highlight groups:
+
+>lua
+    formatter = function(ctx)
+        return {
+            "[",
+            { ctx.seq, ctx.is_current and "AtoneCurrentNode" or "AtoneSeq" },
+            "] ",
+            { ctx.h_time, "Comment" },
+            ctx.bookmark and " " or "",
+            { ctx.bookmark or "", "AtoneMark" },
+        }
+    end
+<
+When you return chunks, chunks with a highlight group are highlighted and
+chunks without one are shown as normal text.
+
 
                                                                               
 KEYMAP ACTIONS                                          *atone-keymap-actions*
