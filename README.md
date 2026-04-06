@@ -26,6 +26,25 @@
 * **Node Marks:** Bookmark important undo states for quick navigation.
 * **Highly Customizable:** Almost every aspect can be configured.
 
+
+
+## How it relates to nvim's built-in `:undotree`?
+
+The built-in undotree is great — it ships with Neovim, requires zero setup, and covers the basics well. If that's all you need, stick with it.
+atone.nvim is for people who want a bit more. Here's a quick comparison:
+
+| Feature                | nvim 0.12 `:undotree` | atone.nvim                                  |
+| ---                    | ---                   | ---                                         |
+| Setup                  | None (built-in)       | Plugin install                              |
+| Tree visualization     | Basic                 | Standard + compact                          |
+| Diff preview           | No                    | TreeSitter highlighted + word-level inline  |
+| Node marks             | No                    | Persistent, numbered, named, fuzzy-findable |
+| Custom labels          | No                    | Yes                                         |
+| Auto-attach to buffers | No                    | Yes                                         |
+| Customization          | Limited               | Highly                                      |
+
+Both have their place, pick what fits your workflow.
+
 ## Installation
 
 You can install `atone.nvim` using your favorite plugin manager. Here comes a example for *lazy.nvim*
