@@ -499,7 +499,7 @@ function M.open()
                     height = height,
                     style = "minimal",
                     border = border_chars,
-                    zindex = 150,
+                    zindex = 50,
                 },
             }, false)
 
