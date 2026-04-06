@@ -72,10 +72,11 @@ M.opts = {
         -- compact graph style
         compact = false,
         node_label = {
+            custom = false,
             ---@param ctx AtoneNode.Label.Ctx
             ---@return string|[string, string][]
             formatter = function(ctx)
-                return string.format("[%d] %s", ctx.seq, ctx.h_time)
+                return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
             end,
             extmark_opts = { strict = false },
         },

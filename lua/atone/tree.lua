@@ -6,7 +6,7 @@ local get_diff_by_seq_cached = utils.cache(get_diff_by_seq)
 
 local extmark_meta = {
     col = nil,
-    ns = api.nvim_create_namespace("atone.tree"),
+    ns = api.nvim_create_namespace("atone_tree"),
     ---@type table<integer, [string, string][]>
     items = {},
 }
@@ -56,7 +56,8 @@ end
 
 local M = {
     ---@type table<integer, AtoneNode>
-    nodes = {}, -- { seq: node }
+    --- { seq: node } mapping
+    nodes = {},
     lines = {},
     total = 1,
     last_seq = 0,
@@ -78,7 +79,7 @@ local function get_node_label(node)
         time = node.time,
         h_time = h_time,
         diff = function()
-            local diff_patch = get_diff_by_seq_cached(node.bufnr, node.seq, node.parent)
+            local diff_patch = get_diff_by_seq_cached(node.bufnr, node.seq)
 
             ---@type AtoneNode.Label.Ctx.Diff
             local diff_stats = { added = 0, removed = 0 }
@@ -400,11 +401,11 @@ function M.render(marks_labels)
                 end
             end
 
-            local target_index = max_depth * 2 + 4
-            local label = marks_labels[seq]
-            local label_suffix = label and label or ""
-            local content = string.format("[%s] %s %s", seq, time, label_suffix)
-            M.lines[lnum] = set_char_at(M.lines[lnum], target_index, content)
+            -- local target_index = max_depth * 2 + 4
+            -- local label = marks_labels[seq]
+            -- local label_suffix = label and label or ""
+            -- local content = string.format("[%s] %s %s", seq, time, label_suffix)
+            -- M.lines[lnum] = set_char_at(M.lines[lnum], target_index, content)
         end
     end
 
