@@ -18,6 +18,7 @@ local M = {
     _auto_diff_buf = nil,
     _dummy_win = nil,
     _dummy_buf = nil,
+    _saved_tree_cursor = nil,
 }
 
 local _resize_autocmd_registered = false
@@ -517,6 +518,10 @@ function M.open()
         end)
     end
     M.refresh()
+    if M._saved_tree_cursor then
+        pcall(api.nvim_win_set_cursor, M._tree_win, M._saved_tree_cursor)
+        M._saved_tree_cursor = nil
+    end
 end
 
 ---@param stay boolean?
@@ -597,6 +602,9 @@ end
 
 function M.close()
     if M._show then
+        if config.opts.persist_cursor and utils.win_exists(M._tree_win) then
+            M._saved_tree_cursor = api.nvim_win_get_cursor(M._tree_win)
+        end
         M._show = false
         pcall(api.nvim_win_close, M._tree_win, true)
         pcall(api.nvim_win_close, M._diff_win, true)

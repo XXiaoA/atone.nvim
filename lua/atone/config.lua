@@ -32,6 +32,8 @@ M.opts = {
         enabled = true,
         excluded_ft = { "oil" },
     },
+    -- Restore the tree cursor position when re-opening after close
+    persist_cursor = true,
     marks = {
         persist = true,
         persist_path = vim.fn.stdpath("data") .. "/atone_marks.json",
