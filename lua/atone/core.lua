@@ -18,6 +18,7 @@ local M = {
     _auto_diff_buf = nil,
     _dummy_win = nil,
     _dummy_buf = nil,
+    _sticky_ref = nil,
 }
 
 local _resize_autocmd_registered = false
@@ -224,6 +225,21 @@ local mappings = {
         end,
         "Open mark picker",
     },
+    set_sticky_ref = {
+        function()
+            if M._sticky_ref ~= nil then
+                M._sticky_ref = nil
+            else
+                local seq = get_seq_under_cursor()
+                if not seq then
+                    return
+                end
+                M._sticky_ref = seq
+            end
+            M.refresh(true)
+        end,
+        "Set/clear sticky diff reference (diff always computed against this node)",
+    },
     undo = {
         function()
             api.nvim_buf_call(M.attach_buf, function()
@@ -244,9 +260,22 @@ local mappings = {
     },
 }
 
+--- Get diff lines for a node, using the sticky ref as base when set.
+---@param seq integer
+---@return string[]
+local function get_diff_for_seq(seq)
+    if M._sticky_ref ~= nil then
+        local old = diff.get_context_by_seq(M.attach_buf, M._sticky_ref)
+        local new = diff.get_context_by_seq(M.attach_buf, seq)
+        return diff.get_diff(old, new)
+    end
+    return diff.get_diff_by_seq(M.attach_buf, seq)
+end
+
 --- Update the diff display buffer and apply the extra diff preview layers.
 ---@param diff_lines string[]
-local function update_diff_buf(diff_lines)
+---@param seq integer the sequence number being shown (used for sticky-ref header)
+local function update_diff_buf(diff_lines, seq)
     utils.set_text(M._auto_diff_buf, diff_lines)
     local lang = config.opts.diff_cur_node.treesitter and highlight.get_lang(M.attach_buf) or nil
     local target_syntax = lang and "" or "diff"
@@ -257,6 +286,22 @@ local function update_diff_buf(diff_lines)
         treesitter = config.opts.diff_cur_node.treesitter,
         inline_diff = config.opts.diff_cur_node.inline_diff,
     })
+    local ns = api.nvim_create_namespace("atone_diff_header")
+    api.nvim_buf_clear_namespace(M._auto_diff_buf, ns, 0, -1)
+    if M._sticky_ref ~= nil and seq ~= nil then
+        local header = string.format("[%d] → [%d]", M._sticky_ref, seq)
+        -- Prepend as a real line; existing highlight extmarks shift automatically
+        utils.set_text(M._auto_diff_buf, { header }, 0, 0)
+        api.nvim_buf_set_extmark(M._auto_diff_buf, ns, 0, 0, {
+            end_row = 0,
+            end_col = #header,
+            hl_group = "Comment",
+            hl_eol = true,
+        })
+        if M._diff_win and api.nvim_win_is_valid(M._diff_win) then
+            api.nvim_win_set_cursor(M._diff_win, { 1, 0 })
+        end
+    end
 end
 
 ---@param direction string
@@ -355,7 +400,7 @@ local function init()
             if not seq or not config.opts.diff_cur_node.enabled then
                 return
             end
-            update_diff_buf(diff.get_diff_by_seq(M.attach_buf, seq))
+            update_diff_buf(get_diff_for_seq(seq), seq)
         end),
     })
 
@@ -546,6 +591,7 @@ function M.refresh(stay)
         local marks_labels = mark.build_labels(filepath)
         local buf_lines = tree.render(marks_labels)
         utils.set_text(M._tree_buf, buf_lines)
+        api.nvim_buf_clear_namespace(M._tree_buf, api.nvim_create_namespace("atone"), 0, -1)
         if config.opts.ui.node_label.custom then
             tree.render_visible_labels(M._tree_buf, M._tree_win)
         end
@@ -570,8 +616,22 @@ function M.refresh(stay)
             tree.nodes[tree.cur_seq].depth * 2 - 1
         )
 
+        if M._sticky_ref and tree.nodes[M._sticky_ref] then
+            local sticky_id = tree.seq_2id(M._sticky_ref)
+            if sticky_id then
+                local sticky_lnum = compact and tree.total - sticky_id + 1 or (tree.total - sticky_id) * 2 + 1
+                utils.color_char(
+                    M._tree_buf,
+                    "AtoneStickyRef",
+                    buf_lines[sticky_lnum],
+                    sticky_lnum,
+                    tree.nodes[M._sticky_ref].depth * 2 - 1
+                )
+            end
+        end
+
         if config.opts.diff_cur_node.enabled then
-            update_diff_buf(diff.get_diff_by_seq(M.attach_buf, tree.cur_seq))
+            update_diff_buf(get_diff_for_seq(tree.cur_seq), tree.cur_seq)
         end
     end
 end

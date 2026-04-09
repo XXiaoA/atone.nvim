@@ -54,6 +54,7 @@ M.opts = {
             help = { "?", "g?" },
             undo = "u",
             redo = "<C-r>",
+            set_sticky_ref = "=",
         },
         auto_diff = {
             quit = { "<C-c>", "q" },

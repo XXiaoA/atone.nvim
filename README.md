@@ -242,6 +242,7 @@ Here are the available actions and their default keybindings:
 | `delete_all_marks` | `dM`           | Delete all marks in current buffer.                             |
 | `goto_mark`        | `'`, `` ` ``   | Jump to a mark slot (0-9).                                      |
 | `mark_picker`      | `s`            | Open mark picker (fuzzy find).                                  |
+| `set_sticky_ref`   | `=`            | Toggle a sticky diff base.                                      |
 | `undo`             | `u`            | Undo one step in the attached buffer.                           |
 | `redo`             | `<C-r>`        | Redo one step in the attached buffer.                           |
 | `quit`             | `<C-c>`, `q`   | Close all `atone.nvim` windows (tree, diff, and help).          |

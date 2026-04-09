@@ -9,6 +9,7 @@ local highlights = {
     CurrentNode = { link = "Keyword" },
     SeqBracket = { link = "Comment" },
     Mark = { link = "BookmarkSign" },
+    StickyRef = { link = "Debug" },
     DiffAdd = { link = "DiffAdd" },
     DiffDelete = { link = "DiffDelete" },
     DiffAddInline = { source = "DiffAdd" },
