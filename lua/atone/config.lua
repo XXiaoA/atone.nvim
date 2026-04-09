@@ -54,16 +54,24 @@ M.opts = {
             help = { "?", "g?" },
             undo = "u",
             redo = "<C-r>",
+            zoom_diff = "<leader>uz",
         },
         auto_diff = {
             quit = { "<C-c>", "q" },
             help = { "?", "g?" },
             undo = "u",
             redo = "<C-r>",
+            zoom_diff = "<leader>uz",
         },
         help = {
             quit_help = { "<C-c>", "q" },
         },
+    },
+    zoom = {
+        --- Width of the zoom float as a fraction of the editor width (0–1)
+        width = 0.8,
+        --- Height of the zoom float as a fraction of the editor height (0–1)
+        height = 0.8,
     },
     ui = {
         -- refer to `:h 'winborder'`
