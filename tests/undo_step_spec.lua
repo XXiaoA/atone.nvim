@@ -64,8 +64,12 @@ describe("undo / redo", function()
             local keymaps = api.nvim_buf_get_keymap(core._auto_diff_buf, "n")
             local fn_undo, fn_redo
             for _, km in ipairs(keymaps) do
-                if km.lhs == "u" then fn_undo = km.callback end
-                if km.lhs == "<C-r>" or km.lhs == "<C-R>" then fn_redo = km.callback end
+                if km.lhs == "u" then
+                    fn_undo = km.callback
+                end
+                if km.lhs == "<C-r>" or km.lhs == "<C-R>" then
+                    fn_redo = km.callback
+                end
             end
             assert.is_not_nil(fn_redo, "<C-r> keymap should be set on auto_diff_buf")
 
