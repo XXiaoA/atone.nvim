@@ -11,9 +11,13 @@ local function make_buf_with_history()
     vim.bo[buf].swapfile = false
     vim.bo[buf].undolevels = 64
     api.nvim_buf_set_lines(buf, 0, -1, false, { "original" })
-    vim.o.undolevels = vim.o.undolevels -- force undo break
+    api.nvim_buf_call(buf, function()
+        vim.o.undolevels = vim.o.undolevels -- force undo break in buf's context
+    end)
     api.nvim_buf_set_lines(buf, 0, -1, false, { "edit 1" })
-    vim.o.undolevels = vim.o.undolevels
+    api.nvim_buf_call(buf, function()
+        vim.o.undolevels = vim.o.undolevels
+    end)
     api.nvim_buf_set_lines(buf, 0, -1, false, { "edit 2" })
     return buf
 end
@@ -61,7 +65,7 @@ describe("undo / redo", function()
             local fn_undo, fn_redo
             for _, km in ipairs(keymaps) do
                 if km.lhs == "u" then fn_undo = km.callback end
-                if km.lhs == "<C-r>" then fn_redo = km.callback end
+                if km.lhs == "<C-r>" or km.lhs == "<C-R>" then fn_redo = km.callback end
             end
             assert.is_not_nil(fn_redo, "<C-r> keymap should be set on auto_diff_buf")
 
