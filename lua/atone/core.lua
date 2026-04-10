@@ -224,11 +224,8 @@ local mappings = {
         end,
         "Open mark picker",
     },
-    undo_step_back = {
+    undo = {
         function()
-            if not M.attach_buf then
-                return
-            end
             api.nvim_buf_call(M.attach_buf, function()
                 vim.cmd("silent undo")
             end)
@@ -236,11 +233,8 @@ local mappings = {
         end,
         "Undo one step in the attached buffer",
     },
-    undo_step_forward = {
+    redo = {
         function()
-            if not M.attach_buf then
-                return
-            end
             api.nvim_buf_call(M.attach_buf, function()
                 vim.cmd("silent redo")
             end)

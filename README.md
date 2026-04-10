@@ -134,8 +134,8 @@ require("atone").setup({
         auto_diff = {
             quit = { "<C-c>", "q" },
             help = { "?", "g?" },
-            undo_step_back = "u",
-            undo_step_forward = "<C-r>",
+            undo = "u",
+            redo = "<C-r>",
         },
         help = {
             quit_help = { "<C-c>", "q" },
@@ -242,8 +242,8 @@ Here are the available actions and their default keybindings:
 | `delete_all_marks` | `dM`      | Delete all marks in current buffer.                             |
 | `goto_mark`   | `'`, `` ` ``   | Jump to a mark slot (0-9).                                      |
 | `mark_picker` | `s`            | Open mark picker (fuzzy find).                                  |
-| `undo_step_back`    | `u` (diff window)      | Undo one step in the attached buffer.                        |
-| `undo_step_forward` | `<C-r>` (diff window)  | Redo one step in the attached buffer.                        |
+| `undo`    | `u` (diff window)      | Undo one step in the attached buffer.                        |
+| `redo` | `<C-r>` (diff window)  | Redo one step in the attached buffer.                        |
 | `quit`        | `<C-c>`, `q`   | Close all `atone.nvim` windows (tree, diff, and help).          |
 | `help`        | `?`, `g?`      | Show the help page.                                             |
 | `quit_help`   | `<C-c>`, `q`   | Close the help window.                                          |

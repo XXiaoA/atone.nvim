@@ -18,7 +18,7 @@ local function make_buf_with_history()
     return buf
 end
 
-describe("undo_step_back / undo_step_forward", function()
+describe("undo / redo", function()
     before_each(function()
         atone.setup({ diff_cur_node = { enabled = false } })
     end)
@@ -29,13 +29,13 @@ describe("undo_step_back / undo_step_forward", function()
         end
     end)
 
-    it("undo_step_back reverts one step in the attached buffer", function()
+    it("undo reverts one step in the attached buffer", function()
         local buf = make_buf_with_history()
         api.nvim_buf_call(buf, function()
             core.open()
             assert.are.same({ "edit 2" }, api.nvim_buf_get_lines(buf, 0, -1, false))
 
-            -- trigger undo_step_back via the buffer-local keymap on _auto_diff_buf
+            -- trigger undo via the buffer-local keymap on _auto_diff_buf
             local keymaps = api.nvim_buf_get_keymap(core._auto_diff_buf, "n")
             local fn_undo
             for _, km in ipairs(keymaps) do
@@ -52,7 +52,7 @@ describe("undo_step_back / undo_step_forward", function()
         api.nvim_buf_delete(buf, { force = true })
     end)
 
-    it("undo_step_forward re-applies a reverted step", function()
+    it("redo re-applies a reverted step", function()
         local buf = make_buf_with_history()
         api.nvim_buf_call(buf, function()
             core.open()
@@ -75,7 +75,7 @@ describe("undo_step_back / undo_step_forward", function()
     end)
 
     it("default keymaps are u and <C-r>", function()
-        assert.are.equal("u", config.opts.keymaps.auto_diff.undo_step_back)
-        assert.are.equal("<C-r>", config.opts.keymaps.auto_diff.undo_step_forward)
+        assert.are.equal("u", config.opts.keymaps.auto_diff.undo)
+        assert.are.equal("<C-r>", config.opts.keymaps.auto_diff.redo)
     end)
 end)
