@@ -35,10 +35,12 @@ describe("zoom_diff", function()
             assert.is_nil(core._zoom_win)
 
             -- trigger zoom_diff via keymap callback
+            -- nvim_buf_get_keymap returns the lhs with <leader> expanded to its value
+            local zoom_lhs = vim.keycode("<leader>uz")
             local keymaps = api.nvim_buf_get_keymap(core._tree_buf, "n")
             local fn_zoom
             for _, km in ipairs(keymaps) do
-                if km.lhs == "<leader>uz" then
+                if km.lhs == zoom_lhs then
                     fn_zoom = km.callback
                     break
                 end
@@ -57,10 +59,13 @@ describe("zoom_diff", function()
         local buf = make_buf()
         api.nvim_buf_call(buf, function()
             core.open()
+            local zoom_lhs = vim.keycode("<leader>uz")
             local keymaps = api.nvim_buf_get_keymap(core._tree_buf, "n")
             local fn_zoom
             for _, km in ipairs(keymaps) do
-                if km.lhs == "<leader>uz" then fn_zoom = km.callback end
+                if km.lhs == zoom_lhs then
+                    fn_zoom = km.callback
+                end
             end
             fn_zoom()
             local zoom_win = core._zoom_win
@@ -77,10 +82,13 @@ describe("zoom_diff", function()
         local buf = make_buf()
         api.nvim_buf_call(buf, function()
             core.open()
+            local zoom_lhs = vim.keycode("<leader>uz")
             local keymaps = api.nvim_buf_get_keymap(core._tree_buf, "n")
             local fn_zoom
             for _, km in ipairs(keymaps) do
-                if km.lhs == "<leader>uz" then fn_zoom = km.callback end
+                if km.lhs == zoom_lhs then
+                    fn_zoom = km.callback
+                end
             end
             fn_zoom()
             assert.is_true(core._show)
