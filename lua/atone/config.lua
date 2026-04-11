@@ -56,6 +56,8 @@ M.opts = {
         auto_diff = {
             quit = { "<C-c>", "q" },
             help = { "?", "g?" },
+            undo = "u",
+            redo = "<C-r>",
         },
         help = {
             quit_help = { "<C-c>", "q" },

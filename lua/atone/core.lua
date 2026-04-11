@@ -224,6 +224,24 @@ local mappings = {
         end,
         "Open mark picker",
     },
+    undo = {
+        function()
+            api.nvim_buf_call(M.attach_buf, function()
+                vim.cmd("silent undo")
+            end)
+            M.refresh()
+        end,
+        "Undo one step in the attached buffer",
+    },
+    redo = {
+        function()
+            api.nvim_buf_call(M.attach_buf, function()
+                vim.cmd("silent redo")
+            end)
+            M.refresh()
+        end,
+        "Redo one step in the attached buffer",
+    },
 }
 
 --- Update the diff display buffer and apply the extra diff preview layers.
