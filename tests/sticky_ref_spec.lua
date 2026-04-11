@@ -15,7 +15,9 @@ local function load_fixture(file, undo_file)
     local seqs = vim.tbl_keys(tree.nodes)
     table.sort(seqs)
     -- Remove seq 0 (the empty root), keep only real undo nodes
-    seqs = vim.tbl_filter(function(s) return s > 0 end, seqs)
+    seqs = vim.tbl_filter(function(s)
+        return s > 0
+    end, seqs)
     return buf, seqs
 end
 
