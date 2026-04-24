@@ -52,6 +52,8 @@ M.opts = {
             goto_mark = { "'", "`" },
             mark_picker = "s",
             help = { "?", "g?" },
+            undo = "u",
+            redo = "<C-r>",
         },
         auto_diff = {
             quit = { "<C-c>", "q" },

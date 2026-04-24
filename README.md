@@ -230,23 +230,23 @@ The `keymaps` table in the configuration allows you to map keys to specific acti
 
 Here are the available actions and their default keybindings:
 
-| Action        | Default Key(s) | Description                                                     |
-| ---           | ---            | ---                                                             |
-| `next_node`   | `j`            | Jump to the next node in the undo tree. Supports `v:count`.     |
-| `pre_node`    | `k`            | Jump to the previous node in the undo tree. Supports `v:count`. |
-| `jump_to_G`   | `G`            | Jump to the node with the specified sequence number like G      |
-| `jump_to_gg`  | `gg`           | Jump to the node with the specified sequence number like gg     |
-| `undo_to`     | `<CR>`         | Revert the buffer to the state of the node under the cursor.    |
-| `set_mark`    | `m`            | Set a mark. Use `N:name` or `N` for slot (0-9).                 |
-| `delete_mark` | `x`, `X`       | Delete the mark on the node under cursor.                       |
-| `delete_all_marks` | `dM`      | Delete all marks in current buffer.                             |
-| `goto_mark`   | `'`, `` ` ``   | Jump to a mark slot (0-9).                                      |
-| `mark_picker` | `s`            | Open mark picker (fuzzy find).                                  |
-| `undo`    | `u` (diff window)      | Undo one step in the attached buffer.                        |
-| `redo` | `<C-r>` (diff window)  | Redo one step in the attached buffer.                        |
-| `quit`        | `<C-c>`, `q`   | Close all `atone.nvim` windows (tree, diff, and help).          |
-| `help`        | `?`, `g?`      | Show the help page.                                             |
-| `quit_help`   | `<C-c>`, `q`   | Close the help window.                                          |
+| Action             | Default Key(s) | Description                                                     |
+| ---                | ---            | ---                                                             |
+| `next_node`        | `j`            | Jump to the next node in the undo tree. Supports `v:count`.     |
+| `pre_node`         | `k`            | Jump to the previous node in the undo tree. Supports `v:count`. |
+| `jump_to_G`        | `G`            | Jump to the node with the specified sequence number like G      |
+| `jump_to_gg`       | `gg`           | Jump to the node with the specified sequence number like gg     |
+| `undo_to`          | `<CR>`         | Revert the buffer to the state of the node under the cursor.    |
+| `set_mark`         | `m`            | Set a mark. Use `N:name` or `N` for slot (0-9).                 |
+| `delete_mark`      | `x`, `X`       | Delete the mark on the node under cursor.                       |
+| `delete_all_marks` | `dM`           | Delete all marks in current buffer.                             |
+| `goto_mark`        | `'`, `` ` ``   | Jump to a mark slot (0-9).                                      |
+| `mark_picker`      | `s`            | Open mark picker (fuzzy find).                                  |
+| `undo`             | `u`            | Undo one step in the attached buffer.                           |
+| `redo`             | `<C-r>`        | Redo one step in the attached buffer.                           |
+| `quit`             | `<C-c>`, `q`   | Close all `atone.nvim` windows (tree, diff, and help).          |
+| `help`             | `?`, `g?`      | Show the help page.                                             |
+| `quit_help`        | `<C-c>`, `q`   | Close the help window.                                          |
 
 ## Highlighting
 
