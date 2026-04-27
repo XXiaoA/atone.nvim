@@ -249,21 +249,6 @@ local mappings = {
                     zindex = 100,
                 },
             })
-            -- "q" closes diff_float and restores the quit mapping
-            utils.keymap("n", "q", function()
-                api.nvim_win_close(M._float_diff_win, true)
-                M._float_diff_win = nil
-            end, { buffer = M._auto_diff_buf, nowait = true })
-            api.nvim_create_autocmd("WinClosed", {
-                pattern = tostring(M._float_diff_win),
-                once = true,
-                callback = function()
-                    M._float_diff_win = nil
-                    utils.keymap("n", "q", function()
-                        M.close()
-                    end, { buffer = M._auto_diff_buf })
-                end,
-            })
         end,
         "Toggle diff float: diff in a centred floating window",
     },
@@ -667,6 +652,7 @@ function M.close()
         pcall(api.nvim_win_close, M._tree_win, true)
         pcall(api.nvim_win_close, M._diff_win, true)
         pcall(api.nvim_win_close, M._float_win, true)
+        pcall(api.nvim_win_close, M._float_diff_win, true)
         pcall(api.nvim_win_close, M._dummy_win, true)
     end
 end
