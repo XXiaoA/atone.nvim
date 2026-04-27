@@ -13,7 +13,7 @@ local M = {
     _tree_win = nil,
     _float_win = nil,
     _diff_win = nil,
-    _zoom_win = nil,
+    _float_diff_win = nil,
     _tree_buf = nil,
     _help_buf = nil,
     _auto_diff_buf = nil,
@@ -225,19 +225,19 @@ local mappings = {
         end,
         "Open mark picker",
     },
-    zoom_diff = {
+    float_diff = {
         function()
-            if utils.win_exists(M._zoom_win) then
-                api.nvim_win_close(M._zoom_win, true)
-                M._zoom_win = nil
+            if utils.win_exists(M._float_diff_win) then
+                api.nvim_win_close(M._float_diff_win, true)
+                M._float_diff_win = nil
                 return
             end
             if not M._auto_diff_buf or not api.nvim_buf_is_valid(M._auto_diff_buf) then
                 return
             end
-            local w = math.floor(vim.o.columns * config.opts.zoom.width)
-            local h = math.floor(vim.o.lines * config.opts.zoom.height)
-            M._zoom_win = api.nvim_open_win(M._auto_diff_buf, true, {
+            local w = math.floor(vim.o.columns * config.opts.diff_float.width)
+            local h = math.floor(vim.o.lines * config.opts.diff_float.height)
+            M._float_diff_win = api.nvim_open_win(M._auto_diff_buf, true, {
                 relative = "editor",
                 row = math.floor((vim.o.lines - h) / 2),
                 col = math.floor((vim.o.columns - w) / 2),
@@ -247,23 +247,23 @@ local mappings = {
                 border = config.opts.ui.border,
                 zindex = 100,
             })
-            -- "q" closes the zoom float and restores the quit mapping
+            -- "q" closes diff_float and restores the quit mapping
             utils.keymap("n", "q", function()
-                api.nvim_win_close(M._zoom_win, true)
-                M._zoom_win = nil
+                api.nvim_win_close(M._float_diff_win, true)
+                M._float_diff_win = nil
             end, { buffer = M._auto_diff_buf, nowait = true })
             api.nvim_create_autocmd("WinClosed", {
-                pattern = tostring(M._zoom_win),
+                pattern = tostring(M._float_diff_win),
                 once = true,
                 callback = function()
-                    M._zoom_win = nil
+                    M._float_diff_win = nil
                     utils.keymap("n", "q", function()
                         M.close()
                     end, { buffer = M._auto_diff_buf })
                 end,
             })
         end,
-        "Toggle zoom: open the diff in a centred floating window",
+        "Toggle diff float: diff in a centred floating window",
     },
     undo = {
         function()
@@ -409,8 +409,8 @@ local function init()
         buffer = M._auto_diff_buf,
         group = M.augroup,
         callback = function()
-            -- Don't close atone when only the zoom float is being closed
-            if not M._zoom_win then
+            -- Don't close atone when only the diff float is being closed
+            if not M._float_diff_win then
                 M.close()
             end
         end,

@@ -130,20 +130,20 @@ require("atone").setup({
             goto_mark = { "'", "`" },
             mark_picker = "s",
             help = { "?", "g?" },
-            zoom_diff = "<leader>uz",
+            float_diff = "gd",
         },
         auto_diff = {
             quit = { "<C-c>", "q" },
             help = { "?", "g?" },
             undo = "u",
             redo = "<C-r>",
-            zoom_diff = "<leader>uz",
+            float_diff = "gd",
         },
         help = {
             quit_help = { "<C-c>", "q" },
         },
     },
-    zoom = {
+    diff_float = {
         width = 0.8,  -- fraction of editor width
         height = 0.8, -- fraction of editor height
     },
@@ -250,7 +250,7 @@ Here are the available actions and their default keybindings:
 | `mark_picker`      | `s`            | Open mark picker (fuzzy find).                                  |
 | `undo`             | `u`            | Undo one step in the attached buffer.                           |
 | `redo`             | `<C-r>`        | Redo one step in the attached buffer.                           |
-| `zoom_diff`   | `<leader>uz` (tree+diff) | Toggle a centred floating window showing the diff.       |
+| `float_diff`   | `gd` (tree+diff) | Toggle a centred floating window showing the diff.       |
 | `quit`             | `<C-c>`, `q`   | Close all `atone.nvim` windows (tree, diff, and help).          |
 | `help`             | `?`, `g?`      | Show the help page.                                             |
 | `quit_help`        | `<C-c>`, `q`   | Close the help window.                                          |
