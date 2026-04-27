@@ -237,15 +237,17 @@ local mappings = {
             end
             local w = math.floor(vim.o.columns * config.opts.diff_float.width)
             local h = math.floor(vim.o.lines * config.opts.diff_float.height)
-            M._float_diff_win = api.nvim_open_win(M._auto_diff_buf, true, {
-                relative = "editor",
-                row = math.floor((vim.o.lines - h) / 2),
-                col = math.floor((vim.o.columns - w) / 2),
-                width = w,
-                height = h,
-                style = "minimal",
-                border = config.opts.ui.border,
-                zindex = 100,
+            M._float_diff_win = utils.new_win("float", M._auto_diff_buf, {
+                win_config = {
+                    relative = "editor",
+                    row = math.floor((vim.o.lines - h) / 2),
+                    col = math.floor((vim.o.columns - w) / 2),
+                    width = w,
+                    height = h,
+                    style = "minimal",
+                    border = config.opts.ui.border,
+                    zindex = 100,
+                },
             })
             -- "q" closes diff_float and restores the quit mapping
             utils.keymap("n", "q", function()
