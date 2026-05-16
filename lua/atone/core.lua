@@ -316,12 +316,20 @@ local function compute_tree_width(lines)
     return fn.strdisplaywidth(first_line) + 10
 end
 
-local function compute_diff_height()
-    return math.floor(api.nvim_win_get_height(M._tree_win) * config.opts.diff_cur_node.split_percent + 0.5)
-end
-
 local function uses_float_diff()
     return config.opts.diff_cur_node.enabled and config.opts.diff_cur_node.width ~= "adaptive"
+end
+
+local function compute_diff_height()
+    local height = api.nvim_win_get_height(M._tree_win)
+
+    if uses_float_diff() and utils.win_exists(M._dummy_win) then
+        -- The hidden dummy split lives below the tree window and consumes one
+        -- separator row, so include both pieces to recover the full column height.
+        height = height + api.nvim_win_get_height(M._dummy_win) + 1
+    end
+
+    return math.max(1, math.floor(height * config.opts.diff_cur_node.split_percent + 0.5))
 end
 
 local function resize_tree_window(lines)
@@ -459,7 +467,7 @@ local function check()
         return false
     end
 
-    if uses_float_diff() and not api.nvim_buf_is_valid(M._dummy_buf) then
+    if uses_float_diff() and not (M._dummy_buf and api.nvim_buf_is_valid(M._dummy_buf)) then
         M.close()
         return false
     end
