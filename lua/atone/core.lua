@@ -13,9 +13,11 @@ local M = {
     _tree_win = nil,
     _float_win = nil,
     _diff_win = nil,
+    _centered_diff_win = nil,
     _tree_buf = nil,
     _help_buf = nil,
     _auto_diff_buf = nil,
+    _centered_diff_buf = nil,
     _dummy_win = nil,
     _dummy_buf = nil,
 }
@@ -62,6 +64,35 @@ local function get_seq_under_cursor()
         return nil
     end
     return tree.id_2seq(id)
+end
+
+---@param buf integer
+---@param diff_lines string[]
+local function render_diff_buf(buf, diff_lines)
+    utils.set_text(buf, diff_lines)
+    local lang = config.opts.diff_cur_node.treesitter and highlight.get_lang(M.attach_buf) or nil
+    local target_syntax = lang and "" or "diff"
+    if vim.bo[buf].syntax ~= target_syntax then
+        api.nvim_set_option_value("syntax", target_syntax, { buf = buf })
+    end
+    highlight.apply(buf, diff_lines, lang, {
+        treesitter = config.opts.diff_cur_node.treesitter,
+        inline_diff = config.opts.diff_cur_node.inline_diff,
+    })
+end
+
+---@param seq integer|nil
+local function update_diff_views(seq)
+    if not seq then
+        return
+    end
+    local diff_lines = diff.get_diff_by_seq(M.attach_buf, seq)
+    if config.opts.diff_cur_node.enabled then
+        render_diff_buf(M._auto_diff_buf, diff_lines)
+    end
+    if M._centered_diff_buf and api.nvim_buf_is_valid(M._centered_diff_buf) then
+        render_diff_buf(M._centered_diff_buf, diff_lines)
+    end
 end
 
 local used_mappings = {}
@@ -224,6 +255,36 @@ local mappings = {
         end,
         "Open mark picker",
     },
+    float_diff = {
+        function()
+            if utils.win_exists(M._centered_diff_win) then
+                api.nvim_win_close(M._centered_diff_win, true)
+                return
+            end
+            local seq = get_seq_under_cursor() or tree.cur_seq
+            if not seq or not (M._centered_diff_buf and api.nvim_buf_is_valid(M._centered_diff_buf)) then
+                return
+            end
+            update_diff_views(seq)
+            local w = math.floor(vim.o.columns * config.opts.diff_float.width)
+            local h = math.floor(vim.o.lines * config.opts.diff_float.height)
+            M._centered_diff_win = utils.new_win("float", M._centered_diff_buf, {
+                win_config = {
+                    relative = "editor",
+                    row = math.floor((vim.o.lines - h) / 2),
+                    col = math.floor((vim.o.columns - w) / 2),
+                    width = w,
+                    height = h,
+                    style = "minimal",
+                    border = config.opts.ui.border,
+                    zindex = 100,
+                },
+                autoclose = config.opts.diff_float.autoclose,
+            })
+            api.nvim_set_option_value("winhl", "Normal:NormalFloat", { win = M._centered_diff_win })
+        end,
+        "Toggle diff float: diff in a centred floating window",
+    },
     undo = {
         function()
             api.nvim_buf_call(M.attach_buf, function()
@@ -243,21 +304,6 @@ local mappings = {
         "Redo one step in the attached buffer",
     },
 }
-
---- Update the diff display buffer and apply the extra diff preview layers.
----@param diff_lines string[]
-local function update_diff_buf(diff_lines)
-    utils.set_text(M._auto_diff_buf, diff_lines)
-    local lang = config.opts.diff_cur_node.treesitter and highlight.get_lang(M.attach_buf) or nil
-    local target_syntax = lang and "" or "diff"
-    if vim.bo[M._auto_diff_buf].syntax ~= target_syntax then
-        api.nvim_set_option_value("syntax", target_syntax, { buf = M._auto_diff_buf })
-    end
-    highlight.apply(M._auto_diff_buf, diff_lines, lang, {
-        treesitter = config.opts.diff_cur_node.treesitter,
-        inline_diff = config.opts.diff_cur_node.inline_diff,
-    })
-end
 
 ---@param direction string
 ---@return string
@@ -288,14 +334,15 @@ local function compute_tree_width(lines)
     return fn.strdisplaywidth(first_line) + 10
 end
 
-local function uses_float_diff()
+---@return boolean?
+local function uses_floating_preview_diff()
     return config.opts.diff_cur_node.enabled and config.opts.diff_cur_node.width ~= "adaptive"
 end
 
 local function compute_diff_height()
     local height = api.nvim_win_get_height(M._tree_win)
 
-    if uses_float_diff() and utils.win_exists(M._dummy_win) then
+    if uses_floating_preview_diff() and utils.win_exists(M._dummy_win) then
         -- The hidden dummy split lives below the tree window and consumes one
         -- separator row, so include both pieces to recover the full column height.
         height = height + api.nvim_win_get_height(M._dummy_win) + 1
@@ -312,8 +359,8 @@ local function resize_tree_window(lines)
     api.nvim_win_set_width(M._tree_win, compute_tree_width(lines))
 end
 
-local function pos_float_diff_win()
-    if not M._show or not uses_float_diff() then
+local function pos_floating_preview_diff_win()
+    if not M._show or not uses_floating_preview_diff() then
         return
     end
     if not (utils.win_exists(M._tree_win) and utils.win_exists(M._diff_win) and utils.win_exists(M._dummy_win)) then
@@ -343,7 +390,7 @@ local function pos_float_diff_win()
 end
 
 local function init()
-    for _, buf_key in ipairs({ "tree_buf", "auto_diff_buf", "help_buf", "dummy_buf" }) do
+    for _, buf_key in ipairs({ "tree_buf", "auto_diff_buf", "centered_diff_buf", "help_buf", "dummy_buf" }) do
         local old_buf = M["_" .. buf_key]
         if old_buf and api.nvim_buf_is_valid(old_buf) then
             pcall(api.nvim_buf_delete, old_buf, { force = true })
@@ -352,6 +399,7 @@ local function init()
 
     M._tree_buf = utils.new_buf()
     M._auto_diff_buf = utils.new_buf()
+    M._centered_diff_buf = utils.new_buf()
     M._help_buf = utils.new_buf()
     M._dummy_buf = nil
 
@@ -360,10 +408,13 @@ local function init()
         group = M.augroup,
         callback = vim.schedule_wrap(function()
             local seq = get_seq_under_cursor()
-            if not seq or not config.opts.diff_cur_node.enabled then
+            if not seq then
                 return
             end
-            update_diff_buf(diff.get_diff_by_seq(M.attach_buf, seq))
+            if not config.opts.diff_cur_node.enabled and not utils.win_exists(M._centered_diff_win) then
+                return
+            end
+            update_diff_views(seq)
         end),
     })
 
@@ -398,7 +449,7 @@ local function init()
             callback = function()
                 if M._show then
                     vim.schedule(function()
-                        pos_float_diff_win()
+                        pos_floating_preview_diff_win()
                     end)
                 end
             end,
@@ -426,6 +477,7 @@ local function check()
     if
         not (
             api.nvim_buf_is_valid(M._auto_diff_buf)
+            and api.nvim_buf_is_valid(M._centered_diff_buf)
             and api.nvim_buf_is_valid(M._tree_buf)
             and api.nvim_buf_is_valid(M._help_buf)
         )
@@ -434,7 +486,7 @@ local function check()
         return false
     end
 
-    if uses_float_diff() and not (M._dummy_buf and api.nvim_buf_is_valid(M._dummy_buf)) then
+    if uses_floating_preview_diff() and not (M._dummy_buf and api.nvim_buf_is_valid(M._dummy_buf)) then
         M.close()
         return false
     end
@@ -463,7 +515,7 @@ function M.open()
         local height = compute_diff_height()
         local diff_width_conf = config.opts.diff_cur_node.width
 
-        if uses_float_diff() then
+        if uses_floating_preview_diff() then
             local diff_width = diff_width_conf < 1 and math.floor(vim.o.columns * diff_width_conf + 0.5)
                 ---@diagnostic disable-next-line: param-type-mismatch
                 or math.floor(diff_width_conf)
@@ -560,7 +612,7 @@ function M.refresh(stay)
         resize_tree_window(buf_lines)
 
         if config.opts.diff_cur_node.width ~= "adaptive" then
-            pos_float_diff_win()
+            pos_floating_preview_diff_win()
         end
 
         if not stay then
@@ -578,9 +630,7 @@ function M.refresh(stay)
             tree.nodes[tree.cur_seq].depth * 2 - 1
         )
 
-        if config.opts.diff_cur_node.enabled then
-            update_diff_buf(diff.get_diff_by_seq(M.attach_buf, tree.cur_seq))
-        end
+        update_diff_views(get_seq_under_cursor() or tree.cur_seq)
     end
 end
 
@@ -628,6 +678,7 @@ function M.close()
         pcall(api.nvim_win_close, M._diff_win, true)
         pcall(api.nvim_win_close, M._float_win, true)
         pcall(api.nvim_win_close, M._dummy_win, true)
+        pcall(api.nvim_win_close, M._centered_diff_win, true)
     end
 end
 
