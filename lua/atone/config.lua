@@ -68,10 +68,12 @@ M.opts = {
         },
     },
     diff_float = {
-        --- Width of the diff float as a fraction of the editor width (0–1)
+        --- width of the diff float as a fraction of the editor width (0–1)
         width = 0.8,
-        --- Height of the diff float as a fraction of the editor height (0–1)
+        --- height of the diff float as a fraction of the editor height (0–1)
         height = 0.8,
+        --- close the centred diff float when it loses focus.
+        autoclose = true,
     },
     ui = {
         -- refer to `:h 'winborder'`

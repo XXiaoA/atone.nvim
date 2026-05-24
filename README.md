@@ -144,8 +144,12 @@ require("atone").setup({
         },
     },
     diff_float = {
-        width = 0.8,  -- fraction of editor width
-        height = 0.8, -- fraction of editor height
+        --- width of the diff float as a fraction of the editor width (0–1)
+        width = 0.8,
+        --- height of the diff float as a fraction of the editor height (0–1)
+        height = 0.8,
+        --- close the centred diff float when it loses focus.
+        autoclose = true,
     },
     ui = {
         -- refer to `:h 'winborder'`
@@ -250,7 +254,7 @@ Here are the available actions and their default keybindings:
 | `mark_picker`      | `s`            | Open mark picker (fuzzy find).                                  |
 | `undo`             | `u`            | Undo one step in the attached buffer.                           |
 | `redo`             | `<C-r>`        | Redo one step in the attached buffer.                           |
-| `float_diff`   | `gd` (tree+diff) | Toggle a centred floating window showing the diff.       |
+| `float_diff`       | `gd`           | Toggle a centred floating diff window.                          |
 | `quit`             | `<C-c>`, `q`   | Close all `atone.nvim` windows (tree, diff, and help).          |
 | `help`             | `?`, `g?`      | Show the help page.                                             |
 | `quit_help`        | `<C-c>`, `q`   | Close the help window.                                          |
