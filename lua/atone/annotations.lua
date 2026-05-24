@@ -56,6 +56,11 @@
 ---@field treesitter? boolean
 ---@field inline_diff? boolean
 
+---@class AtoneDiffFloatConfig
+---@field width? number
+---@field height? number
+---@field autoclose? boolean
+
 ---@class AtoneAutoAttachConfig
 ---@field enabled? boolean
 ---@field excluded_ft? string[]
@@ -78,10 +83,16 @@
 ---@field goto_mark? AtoneKeymap
 ---@field mark_picker? AtoneKeymap
 ---@field help? AtoneKeymap
+---@field undo? AtoneKeymap
+---@field redo? AtoneKeymap
+---@field float_diff? AtoneKeymap
 
 ---@class AtoneAutoDiffKeymapsConfig
 ---@field quit? AtoneKeymap
 ---@field help? AtoneKeymap
+---@field undo? AtoneKeymap
+---@field redo? AtoneKeymap
+---@field float_diff? AtoneKeymap
 
 ---@class AtoneHelpKeymapsConfig
 ---@field quit_help? AtoneKeymap
@@ -104,6 +115,7 @@
 ---@class AtoneConfig
 ---@field layout? AtoneLayoutConfig
 ---@field diff_cur_node? AtoneDiffCurNodeConfig
+---@field diff_float? AtoneDiffFloatConfig
 ---@field auto_attach? AtoneAutoAttachConfig
 ---@field marks? AtoneMarksConfig
 ---@field keymaps? AtoneKeymapsConfig
