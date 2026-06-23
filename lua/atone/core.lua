@@ -384,7 +384,7 @@ local function pos_floating_preview_diff_win()
         relative = "win",
         win = M._dummy_win,
         anchor = anchor,
-        row = height - 1,
+        row = height,
         col = col,
     })
 end
@@ -571,7 +571,7 @@ function M.open()
                     relative = "win",
                     win = M._dummy_win,
                     anchor = anchor,
-                    row = height - 1,
+                    row = height,
                     col = col,
                     width = diff_width,
                     height = height,
