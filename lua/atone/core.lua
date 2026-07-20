@@ -639,6 +639,7 @@ function M.open()
             fn.matchadd("AtoneSeqBracket", [=[\v\[\d+\]]=])
             fn.matchadd("AtoneSeq", [=[\v\[\zs\d+\ze\]]=])
             fn.matchadd("AtoneMark", [=[\v\{[^}]+\}]=])
+            fn.matchadd("AtoneStickyRef", [=[\v\[\=\]]=])
         end)
     end
     M.refresh()
@@ -654,7 +655,7 @@ function M.refresh(stay)
         local filepath = utils.buf_filepath(M.attach_buf)
         mark.prune(filepath, tree.nodes)
         local marks_labels = mark.build_labels(filepath)
-        local buf_lines = tree.render(marks_labels)
+        local buf_lines = tree.render(marks_labels, M._sticky_ref)
         utils.set_text(M._tree_buf, buf_lines)
         api.nvim_buf_clear_namespace(M._tree_buf, api.nvim_create_namespace("atone"), 0, -1)
         if config.opts.ui.node_label.custom then
@@ -739,6 +740,7 @@ end
 function M.close()
     if M._show then
         M._show = false
+        M._sticky_ref = nil
         pcall(api.nvim_win_close, M._tree_win, true)
         pcall(api.nvim_win_close, M._diff_win, true)
         pcall(api.nvim_win_close, M._float_win, true)

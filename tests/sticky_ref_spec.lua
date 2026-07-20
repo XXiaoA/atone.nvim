@@ -162,4 +162,61 @@ describe("sticky ref", function()
         end)
         api.nvim_buf_delete(buf, { force = true })
     end)
+
+    it("shows [=] marker next to the sticky ref node label", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            local seqs = real_seqs()
+            local ref_seq = seqs[1]
+
+            core._sticky_ref = ref_seq
+            core.refresh(true)
+
+            local ref_lnum = seq_to_lnum(ref_seq)
+            local ref_line = api.nvim_buf_get_lines(core._tree_buf, ref_lnum - 1, ref_lnum, false)[1]
+            assert.is_truthy(ref_line:match("%[=%]"), ("sticky ref line should contain [=]: %q"):format(ref_line))
+
+            -- other nodes should not have the marker
+            local other_lnum = seq_to_lnum(seqs[#seqs])
+            local other_line = api.nvim_buf_get_lines(core._tree_buf, other_lnum - 1, other_lnum, false)[1]
+            assert.is_nil(other_line:match("%[=%]"))
+        end)
+        api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it("removes [=] marker when sticky ref is cleared", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            local seqs = real_seqs()
+            local ref_seq = seqs[1]
+            local ref_lnum = seq_to_lnum(ref_seq)
+
+            core._sticky_ref = ref_seq
+            core.refresh(true)
+            local with_marker = api.nvim_buf_get_lines(core._tree_buf, ref_lnum - 1, ref_lnum, false)[1]
+            assert.is_truthy(with_marker:match("%[=%]"))
+
+            core._sticky_ref = nil
+            core.refresh(true)
+            local without_marker = api.nvim_buf_get_lines(core._tree_buf, ref_lnum - 1, ref_lnum, false)[1]
+            assert.is_nil(without_marker:match("%[=%]"))
+        end)
+        api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it("clears sticky ref on close", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            local set_sticky = get_keymap_callback(core._tree_buf, "=")
+            set_sticky()
+            assert.is_not_nil(core._sticky_ref)
+
+            core.close()
+            assert.is_nil(core._sticky_ref)
+        end)
+        api.nvim_buf_delete(buf, { force = true })
+    end)
 end)

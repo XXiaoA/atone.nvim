@@ -86,7 +86,13 @@ M.opts = {
             ---@param ctx AtoneNodeLabelContext
             ---@return AtoneNodeLabel
             formatter = function(ctx)
-                return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
+                return string.format(
+                    "[%d] %s %s%s",
+                    ctx.seq,
+                    ctx.h_time,
+                    ctx.bookmark or "",
+                    ctx.is_sticky_ref and " [=]" or ""
+                )
             end,
             extmark_opts = { strict = false },
         },
