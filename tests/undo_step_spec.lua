@@ -86,4 +86,40 @@ describe("undo / redo", function()
         assert.are.equal("u", config.opts.keymaps.auto_diff.undo)
         assert.are.equal("<C-r>", config.opts.keymaps.auto_diff.redo)
     end)
+
+    it("keeps fixed-width diff float height stable across refresh", function()
+        local prev_lines = vim.o.lines
+        local prev_columns = vim.o.columns
+        local buf = make_buf_with_history()
+        local ok, err = pcall(function()
+            vim.o.lines = 41
+            vim.o.columns = 120
+            atone.setup({ diff_cur_node = { enabled = true, width = 40, split_percent = 0.3 } })
+
+            api.nvim_buf_call(buf, function()
+                core.open()
+
+                local first_dummy_height = api.nvim_win_get_height(core._dummy_win)
+                local first_diff_config = api.nvim_win_get_config(core._diff_win)
+
+                core.refresh(true)
+
+                local second_dummy_height = api.nvim_win_get_height(core._dummy_win)
+                local second_diff_config = api.nvim_win_get_config(core._diff_win)
+
+                assert.are.equal(first_dummy_height, second_dummy_height)
+                assert.are.equal(first_dummy_height, first_diff_config.height)
+                assert.are.equal(second_dummy_height, second_diff_config.height)
+                assert.are.equal(first_dummy_height, first_diff_config.row)
+                assert.are.equal(second_dummy_height, second_diff_config.row)
+            end)
+        end)
+
+        vim.o.lines = prev_lines
+        vim.o.columns = prev_columns
+        api.nvim_buf_delete(buf, { force = true })
+        if not ok then
+            error(err)
+        end
+    end)
 end)

@@ -13,9 +13,11 @@ local M = {
     _tree_win = nil,
     _float_win = nil,
     _diff_win = nil,
+    _centered_diff_win = nil,
     _tree_buf = nil,
     _help_buf = nil,
     _auto_diff_buf = nil,
+    _centered_diff_buf = nil,
     _dummy_win = nil,
     _dummy_buf = nil,
     _sticky_ref = nil,
@@ -63,6 +65,66 @@ local function get_seq_under_cursor()
         return nil
     end
     return tree.id_2seq(id)
+end
+
+---@param buf integer
+---@param diff_lines string[]
+local function render_diff_buf(buf, diff_lines)
+    utils.set_text(buf, diff_lines)
+    local lang = config.opts.diff_cur_node.treesitter and highlight.get_lang(M.attach_buf) or nil
+    local target_syntax = lang and "" or "diff"
+    if vim.bo[buf].syntax ~= target_syntax then
+        api.nvim_set_option_value("syntax", target_syntax, { buf = buf })
+    end
+    highlight.apply(buf, diff_lines, lang, {
+        treesitter = config.opts.diff_cur_node.treesitter,
+        inline_diff = config.opts.diff_cur_node.inline_diff,
+    })
+end
+
+--- Prepend a `[old] → [new]` header line to a diff buffer when a sticky ref is set.
+---@param buf integer
+---@param seq integer|nil
+local function apply_sticky_ref_header(buf, seq)
+    local ns = api.nvim_create_namespace("atone_diff_header")
+    api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    if M._sticky_ref ~= nil and seq ~= nil then
+        local header = string.format("[%d] → [%d]", M._sticky_ref, seq)
+        -- Prepend as a real line; existing highlight extmarks shift automatically
+        utils.set_text(buf, { header }, 0, 0)
+        api.nvim_buf_set_extmark(buf, ns, 0, 0, {
+            end_row = 0,
+            end_col = #header,
+            hl_group = "Comment",
+            hl_eol = true,
+        })
+    end
+end
+
+---@param seq integer|nil
+local function update_diff_views(seq)
+    if not seq then
+        return
+    end
+    local diff_lines
+    if M._sticky_ref ~= nil then
+        local old = diff.get_context_by_seq(M.attach_buf, M._sticky_ref)
+        local new = diff.get_context_by_seq(M.attach_buf, seq)
+        diff_lines = diff.get_diff(old, new)
+    else
+        diff_lines = diff.get_diff_by_seq(M.attach_buf, seq)
+    end
+    if config.opts.diff_cur_node.enabled then
+        render_diff_buf(M._auto_diff_buf, diff_lines)
+        apply_sticky_ref_header(M._auto_diff_buf, seq)
+        if M._sticky_ref ~= nil and M._diff_win and api.nvim_win_is_valid(M._diff_win) then
+            api.nvim_win_set_cursor(M._diff_win, { 1, 0 })
+        end
+    end
+    if M._centered_diff_buf and api.nvim_buf_is_valid(M._centered_diff_buf) then
+        render_diff_buf(M._centered_diff_buf, diff_lines)
+        apply_sticky_ref_header(M._centered_diff_buf, seq)
+    end
 end
 
 local used_mappings = {}
@@ -240,6 +302,36 @@ local mappings = {
         end,
         "Set/clear sticky diff reference (diff always computed against this node)",
     },
+    float_diff = {
+        function()
+            if utils.win_exists(M._centered_diff_win) then
+                api.nvim_win_close(M._centered_diff_win, true)
+                return
+            end
+            local seq = get_seq_under_cursor() or tree.cur_seq
+            if not seq or not (M._centered_diff_buf and api.nvim_buf_is_valid(M._centered_diff_buf)) then
+                return
+            end
+            update_diff_views(seq)
+            local w = math.floor(vim.o.columns * config.opts.diff_float.width)
+            local h = math.floor(vim.o.lines * config.opts.diff_float.height)
+            M._centered_diff_win = utils.new_win("float", M._centered_diff_buf, {
+                win_config = {
+                    relative = "editor",
+                    row = math.floor((vim.o.lines - h) / 2),
+                    col = math.floor((vim.o.columns - w) / 2),
+                    width = w,
+                    height = h,
+                    style = "minimal",
+                    border = config.opts.ui.border,
+                    zindex = 100,
+                },
+                autoclose = config.opts.diff_float.autoclose,
+            })
+            api.nvim_set_option_value("winhl", "Normal:NormalFloat", { win = M._centered_diff_win })
+        end,
+        "Toggle diff float: diff in a centred floating window",
+    },
     undo = {
         function()
             api.nvim_buf_call(M.attach_buf, function()
@@ -259,50 +351,6 @@ local mappings = {
         "Redo one step in the attached buffer",
     },
 }
-
---- Get diff lines for a node, using the sticky ref as base when set.
----@param seq integer
----@return string[]
-local function get_diff_for_seq(seq)
-    if M._sticky_ref ~= nil then
-        local old = diff.get_context_by_seq(M.attach_buf, M._sticky_ref)
-        local new = diff.get_context_by_seq(M.attach_buf, seq)
-        return diff.get_diff(old, new)
-    end
-    return diff.get_diff_by_seq(M.attach_buf, seq)
-end
-
---- Update the diff display buffer and apply the extra diff preview layers.
----@param diff_lines string[]
----@param seq integer the sequence number being shown (used for sticky-ref header)
-local function update_diff_buf(diff_lines, seq)
-    utils.set_text(M._auto_diff_buf, diff_lines)
-    local lang = config.opts.diff_cur_node.treesitter and highlight.get_lang(M.attach_buf) or nil
-    local target_syntax = lang and "" or "diff"
-    if vim.bo[M._auto_diff_buf].syntax ~= target_syntax then
-        api.nvim_set_option_value("syntax", target_syntax, { buf = M._auto_diff_buf })
-    end
-    highlight.apply(M._auto_diff_buf, diff_lines, lang, {
-        treesitter = config.opts.diff_cur_node.treesitter,
-        inline_diff = config.opts.diff_cur_node.inline_diff,
-    })
-    local ns = api.nvim_create_namespace("atone_diff_header")
-    api.nvim_buf_clear_namespace(M._auto_diff_buf, ns, 0, -1)
-    if M._sticky_ref ~= nil and seq ~= nil then
-        local header = string.format("[%d] → [%d]", M._sticky_ref, seq)
-        -- Prepend as a real line; existing highlight extmarks shift automatically
-        utils.set_text(M._auto_diff_buf, { header }, 0, 0)
-        api.nvim_buf_set_extmark(M._auto_diff_buf, ns, 0, 0, {
-            end_row = 0,
-            end_col = #header,
-            hl_group = "Comment",
-            hl_eol = true,
-        })
-        if M._diff_win and api.nvim_win_is_valid(M._diff_win) then
-            api.nvim_win_set_cursor(M._diff_win, { 1, 0 })
-        end
-    end
-end
 
 ---@param direction string
 ---@return string
@@ -333,12 +381,21 @@ local function compute_tree_width(lines)
     return fn.strdisplaywidth(first_line) + 10
 end
 
-local function compute_diff_height()
-    return math.floor(api.nvim_win_get_height(M._tree_win) * config.opts.diff_cur_node.split_percent + 0.5)
+---@return boolean?
+local function uses_floating_preview_diff()
+    return config.opts.diff_cur_node.enabled and config.opts.diff_cur_node.width ~= "adaptive"
 end
 
-local function uses_float_diff()
-    return config.opts.diff_cur_node.enabled and config.opts.diff_cur_node.width ~= "adaptive"
+local function compute_diff_height()
+    local height = api.nvim_win_get_height(M._tree_win)
+
+    if uses_floating_preview_diff() and utils.win_exists(M._dummy_win) then
+        -- The hidden dummy split lives below the tree window and consumes one
+        -- separator row, so include both pieces to recover the full column height.
+        height = height + api.nvim_win_get_height(M._dummy_win) + 1
+    end
+
+    return math.max(1, math.floor(height * config.opts.diff_cur_node.split_percent + 0.5))
 end
 
 local function resize_tree_window(lines)
@@ -349,8 +406,8 @@ local function resize_tree_window(lines)
     api.nvim_win_set_width(M._tree_win, compute_tree_width(lines))
 end
 
-local function pos_float_diff_win()
-    if not M._show or not uses_float_diff() then
+local function pos_floating_preview_diff_win()
+    if not M._show or not uses_floating_preview_diff() then
         return
     end
     if not (utils.win_exists(M._tree_win) and utils.win_exists(M._diff_win) and utils.win_exists(M._dummy_win)) then
@@ -374,13 +431,13 @@ local function pos_float_diff_win()
         relative = "win",
         win = M._dummy_win,
         anchor = anchor,
-        row = height - 1,
+        row = height,
         col = col,
     })
 end
 
 local function init()
-    for _, buf_key in ipairs({ "tree_buf", "auto_diff_buf", "help_buf", "dummy_buf" }) do
+    for _, buf_key in ipairs({ "tree_buf", "auto_diff_buf", "centered_diff_buf", "help_buf", "dummy_buf" }) do
         local old_buf = M["_" .. buf_key]
         if old_buf and api.nvim_buf_is_valid(old_buf) then
             pcall(api.nvim_buf_delete, old_buf, { force = true })
@@ -389,6 +446,7 @@ local function init()
 
     M._tree_buf = utils.new_buf()
     M._auto_diff_buf = utils.new_buf()
+    M._centered_diff_buf = utils.new_buf()
     M._help_buf = utils.new_buf()
     M._dummy_buf = nil
 
@@ -397,10 +455,13 @@ local function init()
         group = M.augroup,
         callback = vim.schedule_wrap(function()
             local seq = get_seq_under_cursor()
-            if not seq or not config.opts.diff_cur_node.enabled then
+            if not seq then
                 return
             end
-            update_diff_buf(get_diff_for_seq(seq), seq)
+            if not config.opts.diff_cur_node.enabled and not utils.win_exists(M._centered_diff_win) then
+                return
+            end
+            update_diff_views(seq)
         end),
     })
 
@@ -435,7 +496,7 @@ local function init()
             callback = function()
                 if M._show then
                     vim.schedule(function()
-                        pos_float_diff_win()
+                        pos_floating_preview_diff_win()
                     end)
                 end
             end,
@@ -463,6 +524,7 @@ local function check()
     if
         not (
             api.nvim_buf_is_valid(M._auto_diff_buf)
+            and api.nvim_buf_is_valid(M._centered_diff_buf)
             and api.nvim_buf_is_valid(M._tree_buf)
             and api.nvim_buf_is_valid(M._help_buf)
         )
@@ -471,7 +533,7 @@ local function check()
         return false
     end
 
-    if uses_float_diff() and not api.nvim_buf_is_valid(M._dummy_buf) then
+    if uses_floating_preview_diff() and not (M._dummy_buf and api.nvim_buf_is_valid(M._dummy_buf)) then
         M.close()
         return false
     end
@@ -500,7 +562,7 @@ function M.open()
         local height = compute_diff_height()
         local diff_width_conf = config.opts.diff_cur_node.width
 
-        if uses_float_diff() then
+        if uses_floating_preview_diff() then
             local diff_width = diff_width_conf < 1 and math.floor(vim.o.columns * diff_width_conf + 0.5)
                 ---@diagnostic disable-next-line: param-type-mismatch
                 or math.floor(diff_width_conf)
@@ -556,7 +618,7 @@ function M.open()
                     relative = "win",
                     win = M._dummy_win,
                     anchor = anchor,
-                    row = height - 1,
+                    row = height,
                     col = col,
                     width = diff_width,
                     height = height,
@@ -586,6 +648,9 @@ end
 function M.refresh(stay)
     if M._show then
         tree.convert(M.attach_buf)
+        if M._sticky_ref and not tree.nodes[M._sticky_ref] then
+            M._sticky_ref = nil
+        end
         local filepath = utils.buf_filepath(M.attach_buf)
         mark.prune(filepath, tree.nodes)
         local marks_labels = mark.build_labels(filepath)
@@ -598,7 +663,7 @@ function M.refresh(stay)
         resize_tree_window(buf_lines)
 
         if config.opts.diff_cur_node.width ~= "adaptive" then
-            pos_float_diff_win()
+            pos_floating_preview_diff_win()
         end
 
         if not stay then
@@ -630,9 +695,7 @@ function M.refresh(stay)
             end
         end
 
-        if config.opts.diff_cur_node.enabled then
-            update_diff_buf(get_diff_for_seq(tree.cur_seq), tree.cur_seq)
-        end
+        update_diff_views(get_seq_under_cursor() or tree.cur_seq)
     end
 end
 
@@ -680,6 +743,7 @@ function M.close()
         pcall(api.nvim_win_close, M._diff_win, true)
         pcall(api.nvim_win_close, M._float_win, true)
         pcall(api.nvim_win_close, M._dummy_win, true)
+        pcall(api.nvim_win_close, M._centered_diff_win, true)
     end
 end
 

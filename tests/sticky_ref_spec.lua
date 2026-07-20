@@ -1,105 +1,165 @@
 ---@diagnostic disable: undefined-global, undefined-field
-local diff = require("atone.diff")
+local atone = require("atone")
+local core = require("atone.core")
 local tree = require("atone.tree")
-local utils = require("atone.utils")
+local diff = require("atone.diff")
+local config = require("atone.config")
 local api = vim.api
 
---- Load a fixture into a scratch buffer and return (buf, sorted_seqs).
-local function load_fixture(file, undo_file)
-    local buf = utils.new_buf()
+local function make_buf_with_history()
+    local buf = api.nvim_create_buf(false, true)
+    vim.bo[buf].buftype = ""
+    vim.bo[buf].modifiable = true
+    vim.bo[buf].swapfile = false
+    vim.bo[buf].undolevels = 64
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "original" })
     api.nvim_buf_call(buf, function()
-        vim.cmd.e(file)
-        vim.cmd("silent rundo " .. undo_file)
-        tree.convert(buf)
+        vim.o.undolevels = vim.o.undolevels
     end)
-    local seqs = vim.tbl_keys(tree.nodes)
-    table.sort(seqs)
-    -- Remove seq 0 (the empty root), keep only real undo nodes
-    seqs = vim.tbl_filter(function(s)
-        return s > 0
-    end, seqs)
-    return buf, seqs
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "edit 1" })
+    api.nvim_buf_call(buf, function()
+        vim.o.undolevels = vim.o.undolevels
+    end)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "edit 2" })
+    return buf
 end
 
-describe("Sticky-ref diffing", function()
-    local buf, seqs
+local function get_keymap_callback(buf, lhs)
+    local keymaps = api.nvim_buf_get_keymap(buf, "n")
+    local target = vim.keycode(lhs)
+    for _, km in ipairs(keymaps) do
+        if km.lhs == target then
+            return km.callback
+        end
+    end
+end
 
+--- Convert a seq to the tree-buffer line number where that node lives.
+local function seq_to_lnum(seq)
+    local id = tree.seq_2id(seq)
+    local compact = config.opts.ui.compact
+    return compact and tree.total - id + 1 or (tree.total - id) * 2 + 1
+end
+
+--- Sorted real seqs (excluding root seq 0).
+local function real_seqs()
+    local seqs = vim.tbl_keys(tree.nodes)
+    table.sort(seqs)
+    return vim.tbl_filter(function(s)
+        return s > 0
+    end, seqs)
+end
+
+describe("sticky ref", function()
     before_each(function()
-        buf, seqs = load_fixture("tests/test1", "tests/test1.undo")
+        atone.setup({ diff_cur_node = { enabled = true } })
     end)
 
     after_each(function()
+        if core._show then
+            core.close()
+        end
+        core._sticky_ref = nil
+    end)
+
+    it("= sets sticky ref to the seq under cursor", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            assert.is_nil(core._sticky_ref)
+
+            local set_sticky = get_keymap_callback(core._tree_buf, "=")
+            assert.is_not_nil(set_sticky, "= keymap should be set on tree buf")
+            set_sticky()
+
+            assert.are.equal(tree.cur_seq, core._sticky_ref)
+        end)
         api.nvim_buf_delete(buf, { force = true })
     end)
 
-    it("get_context_by_seq returns content at the requested undo state", function()
-        -- Context at seq 0 (initial empty state) should differ from later states
-        local ctx_early = diff.get_context_by_seq(buf, seqs[1])
-        local ctx_later = diff.get_context_by_seq(buf, seqs[#seqs])
-        -- They should not be identical for a file with multiple changes
-        assert.is_not_nil(ctx_early)
-        assert.is_not_nil(ctx_later)
-        -- The two contexts are tables of lines
-        assert.is_true(type(ctx_early) == "table")
-        assert.is_true(type(ctx_later) == "table")
+    it("= toggles sticky ref off on second press", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            local set_sticky = get_keymap_callback(core._tree_buf, "=")
+
+            set_sticky()
+            assert.is_not_nil(core._sticky_ref)
+
+            set_sticky()
+            assert.is_nil(core._sticky_ref)
+        end)
+        api.nvim_buf_delete(buf, { force = true })
     end)
 
-    it("get_diff between two arbitrary contexts reflects their exact difference", function()
-        -- This is the core operation the sticky-ref feature relies on:
-        -- diff.get_diff(get_context_by_seq(buf, ref), get_context_by_seq(buf, cur))
-        -- We test it directly with known content to avoid fixture-content fragility.
-        local ctx_old = { "alpha", "beta", "gamma" }
-        local ctx_new = { "alpha", "beta", "gamma", "delta", "epsilon" }
-        local d = diff.get_diff(ctx_old, ctx_new)
+    it("diff uses sticky ref as base instead of parent", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            local seqs = real_seqs()
+            local ref_seq = seqs[1]
+            local target = seqs[#seqs]
 
-        local added = {}
-        for _, l in ipairs(d) do
-            if l:sub(1, 1) == "+" then
-                table.insert(added, l:sub(2))
-            end
-        end
-        assert.are.same({ "delta", "epsilon" }, added)
+            core._sticky_ref = ref_seq
+            api.nvim_win_set_cursor(core._tree_win, { seq_to_lnum(target), 0 })
+            core.refresh(true)
+
+            local expected = diff.get_diff(diff.get_context_by_seq(buf, ref_seq), diff.get_context_by_seq(buf, target))
+            local actual = api.nvim_buf_get_lines(core._auto_diff_buf, 1, -1, false)
+            assert.are.same(expected, actual)
+
+            -- Confirm it differs from the parent-based diff
+            local parent_seq = tree.nodes[target].parent
+            local parent_diff = diff.get_diff(diff.get_context_by_seq(buf, parent_seq), diff.get_context_by_seq(buf, target))
+            assert.are_not.same(parent_diff, actual)
+        end)
+        api.nvim_buf_delete(buf, { force = true })
     end)
 
-    it("diff from a node to itself produces no changes", function()
-        local seq = seqs[1]
-        local ctx = diff.get_context_by_seq(buf, seq)
-        local d = diff.get_diff(ctx, ctx)
-        local has_change = false
-        for _, l in ipairs(d) do
-            if l:sub(1, 1) == "+" or l:sub(1, 1) == "-" then
-                has_change = true
-                break
-            end
-        end
-        assert.is_false(has_change, "diff from a node to itself should have no +/- lines")
-    end)
-end)
+    it("header shows [old] → [new] with seq numbers", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            local seqs = real_seqs()
+            local ref_seq = seqs[1]
+            local target = seqs[#seqs]
 
-describe("Sticky-ref toggle (core._sticky_ref)", function()
-    local core
+            core._sticky_ref = ref_seq
+            api.nvim_win_set_cursor(core._tree_win, { seq_to_lnum(target), 0 })
+            core.refresh(true)
 
-    before_each(function()
-        core = require("atone.core")
-        core._sticky_ref = nil
+            local expected_header = string.format("[%d] → [%d]", ref_seq, target)
+            local actual_header = api.nvim_buf_get_lines(core._auto_diff_buf, 0, 1, false)[1]
+            assert.are.equal(expected_header, actual_header)
+        end)
+        api.nvim_buf_delete(buf, { force = true })
     end)
 
-    after_each(function()
-        core._sticky_ref = nil
+    it("header disappears when sticky ref is cleared", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            core._sticky_ref = tree.cur_seq
+            core.refresh(true)
+            local header_line = api.nvim_buf_get_lines(core._auto_diff_buf, 0, 1, false)[1]
+            assert.is_truthy(header_line:match("→"))
+
+            core._sticky_ref = nil
+            core.refresh(true)
+            local first_line = api.nvim_buf_get_lines(core._auto_diff_buf, 0, 1, false)[1]
+            assert.is_nil(first_line:match("→"))
+        end)
+        api.nvim_buf_delete(buf, { force = true })
     end)
 
-    it("is nil by default", function()
-        assert.is_nil(core._sticky_ref)
-    end)
-
-    it("can be set to a seq value", function()
-        core._sticky_ref = 5
-        assert.are.equal(5, core._sticky_ref)
-    end)
-
-    it("can be cleared back to nil", function()
-        core._sticky_ref = 5
-        core._sticky_ref = nil
-        assert.is_nil(core._sticky_ref)
+    it("stale sticky ref is cleared when its seq disappears from the tree", function()
+        local buf = make_buf_with_history()
+        api.nvim_buf_call(buf, function()
+            core.open()
+            core._sticky_ref = 9999
+            core.refresh(true)
+            assert.is_nil(core._sticky_ref)
+        end)
+        api.nvim_buf_delete(buf, { force = true })
     end)
 end)

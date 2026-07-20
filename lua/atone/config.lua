@@ -55,16 +55,26 @@ M.opts = {
             undo = "u",
             redo = "<C-r>",
             set_sticky_ref = "=",
+            float_diff = "gd",
         },
         auto_diff = {
             quit = { "<C-c>", "q" },
             help = { "?", "g?" },
             undo = "u",
             redo = "<C-r>",
+            float_diff = "gd",
         },
         help = {
             quit_help = { "<C-c>", "q" },
         },
+    },
+    diff_float = {
+        --- width of the diff float as a fraction of the editor width (0–1)
+        width = 0.8,
+        --- height of the diff float as a fraction of the editor height (0–1)
+        height = 0.8,
+        --- close the centred diff float when it loses focus.
+        autoclose = true,
     },
     ui = {
         -- refer to `:h 'winborder'`
