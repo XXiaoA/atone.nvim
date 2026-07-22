@@ -52,6 +52,7 @@ local M = {
     -- update only the rows that actually contain nodes.
     lnum_to_seq = {},
     marks_labels = {},
+    sticky_ref = nil,
     total = 1,
     last_seq = 0,
     cur_seq = 0,
@@ -75,6 +76,7 @@ local function get_node_label(node)
     local ctx = {
         seq = node.seq,
         is_current = node.seq == M.cur_seq,
+        is_sticky_ref = node.seq == M.sticky_ref,
         time = node.time,
         h_time = get_h_time(node),
         bookmark = M.marks_labels[node.seq],
@@ -307,9 +309,10 @@ end
 -- o |  [1]   2    7  <- a node
 -- |/              8  <- line after this node
 -- o    [0]   1    9
-function M.render(marks_labels)
+function M.render(marks_labels, sticky_ref)
     marks_labels = marks_labels or {}
     M.marks_labels = marks_labels
+    M.sticky_ref = sticky_ref
     M.lines = {}
     M.lnum_to_seq = {}
     local max_depth = 1
@@ -425,10 +428,11 @@ function M.render(marks_labels)
             local seq = M.id_2seq(i)
             local lnum = compact and total - i + 1 or (total - i) * 2 + 1
             local node = M.nodes[seq]
+            local sticky = seq == M.sticky_ref and " [=]" or ""
             M.lines[lnum] = set_char_at(
                 M.lines[lnum],
                 label_col,
-                string.format("[%s] %s %s", seq, get_h_time(node), marks_labels[seq] or "")
+                string.format("[%s] %s %s%s", seq, get_h_time(node), marks_labels[seq] or "", sticky)
             )
         end
     end

@@ -161,7 +161,13 @@ require("atone").setup({
             ---@param ctx AtoneNodeLabelContext
             ---@return AtoneNodeLabel
             formatter = function(ctx)
-                return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
+                return string.format(
+                    "[%d] %s %s%s",
+                    ctx.seq,
+                    ctx.h_time,
+                    ctx.bookmark or "",
+                    ctx.is_sticky_ref and " [=]" or ""
+                )
             end,
             extmark_opts = { strict = false },
         },
@@ -181,7 +187,8 @@ require("atone").setup({
             ---@param ctx AtoneNodeLabelContext
             ---@return AtoneNodeLabel
             formatter = function(ctx)
-                return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
+                local sticky = ctx.is_sticky_ref and " [=]" or ""
+                return string.format("[%d] %s %s%s", ctx.seq, ctx.h_time, ctx.bookmark or "", sticky)
             end,
         },
     },
@@ -190,14 +197,15 @@ require("atone").setup({
 
 Available fields on `ctx`:
 
-| Field        | Type                                   | Description                                 |
-| ---          | ---                                    | ---                                         |
-| `seq`        | `integer`                              | Undo sequence number of the node            |
-| `is_current` | `boolean`                              | Whether this node is the current undo state |
-| `time`       | `integer`                              | Raw timestamp from Neovim's undotree        |
-| `h_time`     | `string`                               | Human-readable time string                  |
-| `bookmark`   | `string?`                              | Bookmark label text, e.g. `{a}`             |
-| `diff`       | `{ added: integer, removed: integer }` | Added/removed line counts for the node      |
+| Field            | Type                                   | Description                                       |
+| ---              | ---                                    | ---                                               |
+| `seq`            | `integer`                              | Undo sequence number of the node                  |
+| `is_current`     | `boolean`                              | Whether this node is the current undo state       |
+| `is_sticky_ref`  | `boolean`                              | Whether this node is the pinned sticky diff base  |
+| `time`           | `integer`                              | Raw timestamp from Neovim's undotree              |
+| `h_time`         | `string`                               | Human-readable time string                        |
+| `bookmark`       | `string?`                              | Bookmark label text, e.g. `{a}`                   |
+| `diff`           | `{ added: integer, removed: integer }` | Added/removed line counts for the node            |
 
 Things to know:
 
@@ -213,7 +221,8 @@ Plain string example:
 
 ```lua
 formatter = function(ctx)
-    return string.format("[%d] %s %s", ctx.seq, ctx.h_time, ctx.bookmark or "")
+    local sticky = ctx.is_sticky_ref and " [=]" or ""
+    return string.format("[%d] %s %s%s", ctx.seq, ctx.h_time, ctx.bookmark or "", sticky)
 end
 ```
 
@@ -228,6 +237,8 @@ formatter = function(ctx)
         { ctx.h_time, "Comment" },
         ctx.bookmark and " " or "",
         { ctx.bookmark or "", "AtoneMark" },
+        ctx.is_sticky_ref and " " or "",
+        ctx.is_sticky_ref and { "[=]", "AtoneStickyRef" } or "",
     }
 end
 ```
@@ -252,6 +263,7 @@ Here are the available actions and their default keybindings:
 | `delete_all_marks` | `dM`           | Delete all marks in current buffer.                             |
 | `goto_mark`        | `'`, `` ` ``   | Jump to a mark slot (0-9).                                      |
 | `mark_picker`      | `s`            | Open mark picker (fuzzy find).                                  |
+| `set_sticky_ref`   | `=`            | Toggle a sticky diff base.                                      |
 | `undo`             | `u`            | Undo one step in the attached buffer.                           |
 | `redo`             | `<C-r>`        | Redo one step in the attached buffer.                           |
 | `float_diff`       | `gd`           | Toggle a centred floating diff window.                          |
@@ -268,6 +280,7 @@ Here are the available actions and their default keybindings:
 | `AtoneSeq`              | link to `Number`          | The sequence number of each node                  |
 | `AtoneSeqBracket`       | link to `Comment`         | The brackets surrounding the node sequence number |
 | `AtoneCurrentNode`      | link to `Keyword`         | The currently selected node in the undo tree      |
+| `AtoneStickyRef`        | link to `Debug`           | The pinned sticky diff reference node             |
 | `AtoneMark`             | link to `BookmarkSign`    | Mark labels on nodes                              |
 | `AtoneDiffAdd`          | link to `DiffAdd`         | Background for added lines in the diff preview    |
 | `AtoneDiffDelete`       | link to `DiffDelete`      | Background for removed lines in the diff preview  |

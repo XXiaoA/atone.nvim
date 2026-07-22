@@ -210,7 +210,7 @@ describe("fixed label mode", function()
             ui = { compact = false, node_label = { custom = false } },
         })
 
-        eq(#info.matches, 3)
+        eq(#info.matches, 4)
     end)
 end)
 

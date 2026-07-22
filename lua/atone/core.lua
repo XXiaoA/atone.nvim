@@ -20,6 +20,7 @@ local M = {
     _centered_diff_buf = nil,
     _dummy_win = nil,
     _dummy_buf = nil,
+    _sticky_ref = nil,
 }
 
 local _resize_autocmd_registered = false
@@ -81,17 +82,48 @@ local function render_diff_buf(buf, diff_lines)
     })
 end
 
+--- Prepend a `[old] → [new]` header line to a diff buffer when a sticky ref is set.
+---@param buf integer
+---@param seq integer|nil
+local function apply_sticky_ref_header(buf, seq)
+    local ns = api.nvim_create_namespace("atone_diff_header")
+    api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    if M._sticky_ref ~= nil and seq ~= nil then
+        local header = string.format("[%d] → [%d]", M._sticky_ref, seq)
+        -- Prepend as a real line; existing highlight extmarks shift automatically
+        utils.set_text(buf, { header }, 0, 0)
+        api.nvim_buf_set_extmark(buf, ns, 0, 0, {
+            end_row = 0,
+            end_col = #header,
+            hl_group = "Comment",
+            hl_eol = true,
+        })
+    end
+end
+
 ---@param seq integer|nil
 local function update_diff_views(seq)
     if not seq then
         return
     end
-    local diff_lines = diff.get_diff_by_seq(M.attach_buf, seq)
+    local diff_lines
+    if M._sticky_ref ~= nil then
+        local old = diff.get_context_by_seq(M.attach_buf, M._sticky_ref)
+        local new = diff.get_context_by_seq(M.attach_buf, seq)
+        diff_lines = diff.get_diff(old, new)
+    else
+        diff_lines = diff.get_diff_by_seq(M.attach_buf, seq)
+    end
     if config.opts.diff_cur_node.enabled then
         render_diff_buf(M._auto_diff_buf, diff_lines)
+        apply_sticky_ref_header(M._auto_diff_buf, seq)
+        if M._sticky_ref ~= nil and M._diff_win and api.nvim_win_is_valid(M._diff_win) then
+            api.nvim_win_set_cursor(M._diff_win, { 1, 0 })
+        end
     end
     if M._centered_diff_buf and api.nvim_buf_is_valid(M._centered_diff_buf) then
         render_diff_buf(M._centered_diff_buf, diff_lines)
+        apply_sticky_ref_header(M._centered_diff_buf, seq)
     end
 end
 
@@ -254,6 +286,21 @@ local mappings = {
             end)
         end,
         "Open mark picker",
+    },
+    set_sticky_ref = {
+        function()
+            if M._sticky_ref ~= nil then
+                M._sticky_ref = nil
+            else
+                local seq = get_seq_under_cursor()
+                if not seq then
+                    return
+                end
+                M._sticky_ref = seq
+            end
+            M.refresh(true)
+        end,
+        "Set/clear sticky diff reference (diff always computed against this node)",
     },
     float_diff = {
         function()
@@ -592,6 +639,7 @@ function M.open()
             fn.matchadd("AtoneSeqBracket", [=[\v\[\d+\]]=])
             fn.matchadd("AtoneSeq", [=[\v\[\zs\d+\ze\]]=])
             fn.matchadd("AtoneMark", [=[\v\{[^}]+\}]=])
+            fn.matchadd("AtoneStickyRef", [=[\v\[\=\]]=])
         end)
     end
     M.refresh()
@@ -601,11 +649,15 @@ end
 function M.refresh(stay)
     if M._show then
         tree.convert(M.attach_buf)
+        if M._sticky_ref and not tree.nodes[M._sticky_ref] then
+            M._sticky_ref = nil
+        end
         local filepath = utils.buf_filepath(M.attach_buf)
         mark.prune(filepath, tree.nodes)
         local marks_labels = mark.build_labels(filepath)
-        local buf_lines = tree.render(marks_labels)
+        local buf_lines = tree.render(marks_labels, M._sticky_ref)
         utils.set_text(M._tree_buf, buf_lines)
+        api.nvim_buf_clear_namespace(M._tree_buf, api.nvim_create_namespace("atone"), 0, -1)
         if config.opts.ui.node_label.custom then
             tree.render_visible_labels(M._tree_buf, M._tree_win)
         end
@@ -629,6 +681,20 @@ function M.refresh(stay)
             cur_line,
             tree.nodes[tree.cur_seq].depth * 2 - 1
         )
+
+        if M._sticky_ref and tree.nodes[M._sticky_ref] then
+            local sticky_id = tree.seq_2id(M._sticky_ref)
+            if sticky_id then
+                local sticky_lnum = compact and tree.total - sticky_id + 1 or (tree.total - sticky_id) * 2 + 1
+                utils.color_char(
+                    M._tree_buf,
+                    "AtoneStickyRef",
+                    buf_lines[sticky_lnum],
+                    sticky_lnum,
+                    tree.nodes[M._sticky_ref].depth * 2 - 1
+                )
+            end
+        end
 
         update_diff_views(get_seq_under_cursor() or tree.cur_seq)
     end
@@ -674,6 +740,7 @@ end
 function M.close()
     if M._show then
         M._show = false
+        M._sticky_ref = nil
         pcall(api.nvim_win_close, M._tree_win, true)
         pcall(api.nvim_win_close, M._diff_win, true)
         pcall(api.nvim_win_close, M._float_win, true)

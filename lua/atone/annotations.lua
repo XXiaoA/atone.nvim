@@ -23,6 +23,7 @@
 ---@class AtoneNodeLabelContext
 ---@field seq integer
 ---@field is_current boolean
+---@field is_sticky_ref boolean Whether this node is the pinned sticky diff reference
 ---@field time integer
 ---@field h_time string Time in a human-readable format
 ---@field bookmark string? Bookmark label text built by `mark.build_labels`
