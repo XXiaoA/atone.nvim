@@ -20,7 +20,7 @@
 ## Features
 
 * **Blazing Fast**
-* **Mordern UI**
+* **Modern UI**
 * **Live Syntax-Aware Diff**: Instant, TreeSitter-powered diff previews with word-level inline highlighting.
 * **Auto-attaching Tree:** The undo tree automatically follows you as you switch between buffers.
 * **Node Marks:** Bookmark important undo states for quick navigation.
