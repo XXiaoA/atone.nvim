@@ -1,4 +1,4 @@
-*atone.txt*           For Neovim >= 0.11.3           Last change: 2026 July 23
+*atone.txt*           For Neovim >= 0.11.3           Last change: 2026 July 30
 
 ==============================================================================
 Table of Contents                                    *atone-table-of-contents*
@@ -18,7 +18,7 @@ FEATURES                                                      *atone-features*
 
 
 * **Blazing Fast**
-* **Mordern UI**
+* **Modern UI**
 * **Live Syntax-Aware Diff**: Instant, TreeSitter-powered diff previews with
   word-level inline highlighting.
 * **Auto-attaching Tree:** The undo tree automatically follows you as you
