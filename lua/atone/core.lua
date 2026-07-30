@@ -4,6 +4,7 @@ local highlight = require("atone.highlight")
 local config = require("atone.config")
 local tree = require("atone.tree")
 local mark = require("atone.mark")
+local actions = require("atone.actions")
 local utils = require("atone.utils")
 
 local M = {
@@ -27,7 +28,7 @@ local _resize_autocmd_registered = false
 
 --- position the cursor at a specific node in the tree graph
 ---@param id integer
-local function pos_cursor_by_id(id)
+function M.pos_cursor_by_id(id)
     local compact = config.opts.ui.compact
     if id <= 0 then
         api.nvim_win_set_cursor(M._tree_win, { compact and tree.total or tree.total * 2 - 1, 0 })
@@ -39,17 +40,10 @@ local function pos_cursor_by_id(id)
     end
 end
 
----@param seq integer
-local function undo_to(seq)
-    api.nvim_buf_call(M.attach_buf, function()
-        vim.cmd("silent undo " .. seq)
-    end)
-end
-
 --- get the id under cursor in _tree_win
 --- when the cursor is between two nodes, return the average (of their id).
 ---@return integer
-local function id_under_cursor()
+function M.id_under_cursor()
     -- compact: total - cur_id + 1 = lnum
     -- otherwise: 2 * (total - cur_id) + 1 = lnum
     local lnum = api.nvim_win_get_cursor(M._tree_win)[1]
@@ -59,8 +53,8 @@ end
 --- get the seq under cursor in _tree_win
 --- when the cursor is between two nodes, return nil
 ---@return integer|nil
-local function get_seq_under_cursor()
-    local id = id_under_cursor()
+function M.get_seq_under_cursor()
+    local id = M.id_under_cursor()
     if id % 1 ~= 0 then
         return nil
     end
@@ -102,7 +96,7 @@ local function apply_sticky_ref_header(buf, seq)
 end
 
 ---@param seq integer|nil
-local function update_diff_views(seq)
+function M.update_diff_views(seq)
     if not seq then
         return
     end
@@ -126,231 +120,6 @@ local function update_diff_views(seq)
         apply_sticky_ref_header(M._centered_diff_buf, seq)
     end
 end
-
-local used_mappings = {}
-local mappings = {
-    quit = {
-        function()
-            M.close()
-        end,
-        "Close all atone windows",
-    },
-    quit_help = {
-        function()
-            pcall(api.nvim_win_close, M._float_win, true)
-        end,
-        "Close help window",
-    },
-    next_node = {
-        function()
-            pos_cursor_by_id(math.ceil(id_under_cursor()) - vim.v.count1)
-        end,
-        "Jump to next node (v:count supported)",
-    }, -- support v:count
-    pre_node = {
-        function()
-            pos_cursor_by_id(math.floor(id_under_cursor()) + vim.v.count1)
-        end,
-        "Jump to previous node (v:count supported)",
-    }, -- support v:count
-    jump_to_G = {
-        function()
-            pos_cursor_by_id(tree.seq_2id(vim.v.count))
-        end,
-        "Jump to the node with the specified sequence number like G",
-    },
-    jump_to_gg = {
-        function()
-            local target_seq = vim.v.count == 0 and tree.last_seq or vim.v.count
-            pos_cursor_by_id(tree.seq_2id(target_seq))
-        end,
-        "Jump to the node with the specified sequence number like gg",
-    },
-    undo_to = {
-        function()
-            local seq = get_seq_under_cursor()
-            if seq then
-                undo_to(seq)
-                M.refresh()
-            end
-        end,
-        "Undo to the node under cursor",
-    },
-    help = {
-        function()
-            M.show_help()
-        end,
-        "Show help page",
-    },
-    set_mark = {
-        function()
-            local seq = get_seq_under_cursor()
-            if not seq then
-                return
-            end
-            local filepath = utils.buf_filepath(M.attach_buf)
-            local function ask(default_val)
-                vim.ui.input({ prompt = "Mark name (N:name or N for slot): ", default = default_val }, function(input)
-                    if not input or input == "" then
-                        return
-                    end
-                    local name, slot = mark.parse_input(input)
-                    if not name then
-                        vim.notify("Atone: Slot must be a single digit (0-9)", vim.log.levels.WARN)
-                        ask(input)
-                        return
-                    end
-                    mark.set_mark(filepath, seq, name, slot)
-                    M.refresh(true)
-                end)
-            end
-            ask()
-        end,
-        "Set a mark on the node under cursor",
-    },
-    delete_mark = {
-        function()
-            local seq = get_seq_under_cursor()
-            if not seq then
-                return
-            end
-            local filepath = utils.buf_filepath(M.attach_buf)
-            local seq_marks = mark.get_by_seq(filepath, seq)
-            if #seq_marks == 0 then
-                vim.notify("Atone: No marks on this node", vim.log.levels.INFO)
-                return
-            end
-            if #seq_marks == 1 then
-                mark.delete_mark(filepath, seq_marks[1].name)
-                M.refresh(true)
-            else
-                local names = vim.tbl_map(function(m)
-                    return m.name
-                end, seq_marks)
-                vim.ui.select(names, { prompt = "Delete mark: " }, function(_, idx)
-                    if idx then
-                        mark.delete_mark(filepath, seq_marks[idx].name)
-                        M.refresh(true)
-                    end
-                end)
-            end
-        end,
-        "Delete the mark on the node under cursor",
-    },
-    goto_mark = {
-        function()
-            local filepath = utils.buf_filepath(M.attach_buf)
-            local ch = fn.getcharstr()
-            if ch == "\27" then
-                return
-            end
-            local digit = tonumber(ch)
-            if digit and digit >= 0 and digit <= 9 then
-                local m = mark.get_by_slot(filepath, digit)
-                if m then
-                    local id = tree.seq_2id(m.seq)
-                    if id then
-                        pos_cursor_by_id(id)
-                    else
-                        vim.notify("Atone: Mark target seq " .. m.seq .. " not found in tree", vim.log.levels.WARN)
-                    end
-                else
-                    vim.notify("Atone: No mark in slot " .. digit, vim.log.levels.INFO)
-                end
-            end
-        end,
-        "Jump to a mark slot (0-9)",
-    },
-    delete_all_marks = {
-        function()
-            local filepath = utils.buf_filepath(M.attach_buf)
-            local marks = mark.get_marks(filepath)
-            if vim.tbl_isempty(marks) then
-                vim.notify("Atone: No marks in this buffer", vim.log.levels.INFO)
-                return
-            end
-            mark.delete_all_marks(filepath)
-            M.refresh(true)
-        end,
-        "Delete all marks in current buffer",
-    },
-    mark_picker = {
-        function()
-            mark.pick(M.attach_buf, function(m)
-                if m then
-                    local id = tree.seq_2id(m.seq)
-                    if id then
-                        pos_cursor_by_id(id)
-                    end
-                end
-            end)
-        end,
-        "Open mark picker",
-    },
-    set_sticky_ref = {
-        function()
-            if M._sticky_ref ~= nil then
-                M._sticky_ref = nil
-            else
-                local seq = get_seq_under_cursor()
-                if not seq then
-                    return
-                end
-                M._sticky_ref = seq
-            end
-            M.refresh(true)
-        end,
-        "Set/clear sticky diff reference (diff always computed against this node)",
-    },
-    float_diff = {
-        function()
-            if utils.win_exists(M._centered_diff_win) then
-                api.nvim_win_close(M._centered_diff_win, true)
-                return
-            end
-            local seq = get_seq_under_cursor() or tree.cur_seq
-            if not seq or not (M._centered_diff_buf and api.nvim_buf_is_valid(M._centered_diff_buf)) then
-                return
-            end
-            update_diff_views(seq)
-            local w = math.floor(vim.o.columns * config.opts.diff_float.width)
-            local h = math.floor(vim.o.lines * config.opts.diff_float.height)
-            M._centered_diff_win = utils.new_win("float", M._centered_diff_buf, {
-                win_config = {
-                    relative = "editor",
-                    row = math.floor((vim.o.lines - h) / 2),
-                    col = math.floor((vim.o.columns - w) / 2),
-                    width = w,
-                    height = h,
-                    style = "minimal",
-                    border = config.opts.ui.border,
-                    zindex = 100,
-                },
-                autoclose = config.opts.diff_float.autoclose,
-            })
-            api.nvim_set_option_value("winhl", "Normal:NormalFloat", { win = M._centered_diff_win })
-        end,
-        "Toggle diff float: diff in a centred floating window",
-    },
-    undo = {
-        function()
-            api.nvim_buf_call(M.attach_buf, function()
-                vim.cmd("silent undo")
-            end)
-            M.refresh()
-        end,
-        "Undo one step in the attached buffer",
-    },
-    redo = {
-        function()
-            api.nvim_buf_call(M.attach_buf, function()
-                vim.cmd("silent redo")
-            end)
-            M.refresh()
-        end,
-        "Redo one step in the attached buffer",
-    },
-}
 
 ---@param direction string
 ---@return string
@@ -454,14 +223,14 @@ local function init()
         buffer = M._tree_buf,
         group = M.augroup,
         callback = vim.schedule_wrap(function()
-            local seq = get_seq_under_cursor()
+            local seq = M.get_seq_under_cursor()
             if not seq then
                 return
             end
             if not config.opts.diff_cur_node.enabled and not utils.win_exists(M._centered_diff_win) then
                 return
             end
-            update_diff_views(seq)
+            M.update_diff_views(seq)
         end),
     })
 
@@ -507,16 +276,16 @@ local function init()
     -- register keymaps
     local keymaps_conf = config.opts.keymaps
     for action, lhs in pairs(keymaps_conf.tree) do
-        utils.keymap("n", lhs, mappings[action][1], { buffer = M._tree_buf })
-        used_mappings[action] = { lhs, mappings[action][2] }
+        utils.keymap("n", lhs, actions.actions[action][1], { buffer = M._tree_buf })
+        actions.used_mappings[action] = { lhs, actions.actions[action][2] }
     end
     for action, lhs in pairs(keymaps_conf.auto_diff) do
-        utils.keymap("n", lhs, mappings[action][1], { buffer = M._auto_diff_buf })
-        used_mappings[action] = { lhs, mappings[action][2] }
+        utils.keymap("n", lhs, actions.actions[action][1], { buffer = M._auto_diff_buf })
+        actions.used_mappings[action] = { lhs, actions.actions[action][2] }
     end
     for action, lhs in pairs(keymaps_conf.help) do
-        utils.keymap("n", lhs, mappings[action][1], { buffer = M._help_buf })
-        used_mappings[action] = { lhs, mappings[action][2] }
+        utils.keymap("n", lhs, actions.actions[action][1], { buffer = M._help_buf })
+        actions.used_mappings[action] = { lhs, actions.actions[action][2] }
     end
 end
 
@@ -668,7 +437,7 @@ function M.refresh(stay)
         end
 
         if not stay then
-            pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
+            M.pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
         end
 
         local compact = config.opts.ui.compact
@@ -696,7 +465,7 @@ function M.refresh(stay)
             end
         end
 
-        update_diff_views(get_seq_under_cursor() or tree.cur_seq)
+        M.update_diff_views(M.get_seq_under_cursor() or tree.cur_seq)
     end
 end
 
@@ -705,7 +474,7 @@ function M.show_help()
     local help_lines = {}
     local max_lhs = 0
     local max_line = 0
-    for _, v in pairs(used_mappings) do
+    for _, v in pairs(actions.used_mappings) do
         local lhs = v[1]
         local desc = v[2]
         if type(lhs) == "table" then
@@ -751,7 +520,7 @@ end
 
 function M.focus()
     if M._show then
-        pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
+        M.pos_cursor_by_id(tree.seq_2id(tree.cur_seq))
         api.nvim_set_current_win(M._tree_win)
     end
 end
