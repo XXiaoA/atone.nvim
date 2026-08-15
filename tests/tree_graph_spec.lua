@@ -131,6 +131,82 @@ local function measure_custom_formatter_calls()
     return result
 end
 
+-- Reverse lookup derived from config: glyph character -> its arcs. Derived
+-- instead of hand-written so it cannot drift out of sync with config.
+local function build_glyph_arcs()
+    local s = require("atone.config").get_graph_symbols()
+    local arcs = {}
+    for mask, ch in pairs(s.node_glyphs) do
+        arcs[ch] = {
+            up = mask % 2 == 1,
+            down = mask % 4 >= 2,
+            left = mask % 8 >= 4,
+            right = mask >= 8,
+        }
+    end
+    return arcs
+end
+
+-- Render the tree and return the stripped lines.
+local function render_lines(file, undo_file, opts)
+    -- Pin node_label.custom to false so earlier tests that enabled custom
+    -- labels cannot change the rendered output.
+    require("atone").setup(vim.tbl_deep_extend("force", opts, {
+        ui = { node_label = { custom = false } },
+    }))
+    return get_tree_lines(file, undo_file)
+end
+
+-- Verify that every node glyph is a valid branch commit character and that
+-- its arcs are consistent with the graph lines around it: a line above/below
+-- or to the left must be reflected in the glyph's up/down/left arc.
+local function check_branch_graph_consistency(file, undo_file)
+    local tree = require("atone.tree")
+    local utils = require("atone.utils")
+    local api = vim.api
+    local lines, lnum_to_seq, nodes
+    local buf = utils.new_buf()
+    api.nvim_buf_call(buf, function()
+        vim.cmd.e(file)
+        vim.cmd("silent rundo " .. undo_file)
+        tree.convert(buf)
+        lines = tree.render()
+        lnum_to_seq = tree.lnum_to_seq
+        nodes = tree.nodes
+    end)
+    api.nvim_buf_delete(buf, { force = true })
+
+    local s = require("atone.config").get_graph_symbols()
+    local glyph_arcs = build_glyph_arcs()
+    -- A line above connects only when its bottom edge has an endpoint
+    -- (vline/fork); corner/merge arc upward, so a node below them is not
+    -- connected. A line below connects when its top edge has an endpoint.
+    local is_up_line = { [s.vline] = true, [s.fork] = true }
+    local is_down_line = { [s.vline] = true, [s.fork] = true, [s.merge] = true, [s.corner] = true }
+    for lnum, seq in pairs(lnum_to_seq) do
+        local col = nodes[seq].depth * 2 - 1
+        local ch = vim.fn.strcharpart(lines[lnum], col - 1, 1)
+        local arcs = glyph_arcs[ch]
+        assert(arcs, string.format("node at line %d (seq %d) is not a branch node glyph: %q", lnum, seq, ch))
+        local above = lnum > 1 and vim.fn.strcharpart(lines[lnum - 1] or "", col - 1, 1) or ""
+        local below = vim.fn.strcharpart(lines[lnum + 1] or "", col - 1, 1) or ""
+        local left = col > 1 and vim.fn.strcharpart(lines[lnum], col - 2, 1) or ""
+        local right = vim.fn.strcharpart(lines[lnum], col, 1)
+        if is_up_line[above] then
+            assert(arcs.up, string.format("node at line %d has a line above but no up arc", lnum))
+        end
+        if is_down_line[below] then
+            assert(arcs.down, string.format("node at line %d has a line below but no down arc", lnum))
+        end
+        if left == s.hline then
+            assert(arcs.left, string.format("node at line %d has a line to the left but no left arc", lnum))
+        end
+        if right == s.hline then
+            assert(arcs.right, string.format("node at line %d has a line to the right but no right arc", lnum))
+        end
+    end
+end
+
 describe("default labels", function()
     require("atone").setup({ ui = { compact = false, node_label = { custom = false } } })
 
@@ -576,5 +652,371 @@ describe("compact style (ui.compact = true)", function()
             "●─╯", -- [0]
         }
         eq(actual, expected)
+    end)
+end)
+
+describe("branch symbols (ui.branch_symbols = true)", function()
+    local expectations = {
+        {
+            file = "test1",
+            compact = false,
+            lines = {
+                "",
+                "",
+                " ",
+                " ",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "",
+                "  ",
+                "  ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test1",
+            compact = true,
+            lines = {
+                "",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "",
+                "  ",
+                "",
+            },
+        },
+        {
+            file = "test2",
+            compact = false,
+            lines = {
+                "",
+                "",
+                " ",
+                " ",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "",
+                "  ",
+                "  ",
+                " ",
+                "   ",
+                "",
+                "",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test2",
+            compact = true,
+            lines = {
+                "",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "",
+                "  ",
+                " ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test3",
+            compact = false,
+            lines = {
+                "",
+                "",
+                "",
+                "",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "   ",
+                "   ",
+                " ",
+                "  ",
+                "  ",
+                "",
+                " ",
+                " ",
+                " ",
+                "",
+                "",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test3",
+            compact = true,
+            lines = {
+                "",
+                "",
+                " ",
+                "  ",
+                "  ",
+                "   ",
+                " ",
+                "  ",
+                "",
+                " ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test4",
+            compact = false,
+            lines = {
+                "",
+                "",
+                " ",
+                " ",
+                "",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                " ",
+                "   ",
+                "",
+                "",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test4",
+            compact = true,
+            lines = {
+                "",
+                " ",
+                "",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                " ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test5",
+            compact = false,
+            lines = {
+                "",
+                "",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "",
+                " ",
+                " ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test5",
+            compact = true,
+            lines = {
+                "",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "",
+                " ",
+                "",
+            },
+        },
+        {
+            file = "test6",
+            compact = false,
+            lines = {
+                "",
+                "",
+                "",
+                "",
+                " ",
+                " ",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "  ",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test6",
+            compact = true,
+            lines = {
+                "",
+                "",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                "",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test7",
+            compact = false,
+            lines = {
+                "",
+                "",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "  ",
+                " ",
+                "  ",
+                " ",
+                "   ",
+                "",
+                "",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test7",
+            compact = true,
+            lines = {
+                "",
+                " ",
+                "  ",
+                " ",
+                "  ",
+                " ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test8",
+            compact = false,
+            lines = {
+                "",
+                "",
+                "",
+                "",
+                " ",
+                "",
+                " ",
+                "",
+                " ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test8",
+            compact = true,
+            lines = {
+                "",
+                "",
+                "",
+                "",
+                " ",
+                "",
+            },
+        },
+        {
+            file = "test9",
+            compact = false,
+            lines = {
+                "",
+                "",
+                " ",
+                " ",
+                "  ",
+                "  ",
+                "",
+                " ",
+                " ",
+                "",
+                "",
+            },
+        },
+        {
+            file = "test9",
+            compact = true,
+            lines = {
+                "",
+                " ",
+                "  ",
+                "",
+                " ",
+                "",
+            },
+        },
+    }
+
+    for _, case in ipairs(expectations) do
+        it(string.format("%s (compact=%s)", case.file, tostring(case.compact)), function()
+            local actual = render_lines("tests/" .. case.file, "tests/" .. case.file .. ".undo", {
+                ui = { compact = case.compact, branch_symbols = true },
+            })
+            eq(actual, case.lines)
+        end)
+    end
+end)
+
+describe("branch symbols on fixed undo data", function()
+    local files = { "test1", "test2", "test3", "test4", "test5", "test6", "test7", "test8", "test9" }
+
+    it("node glyphs are consistent with surrounding graph lines", function()
+        for _, compact in ipairs({ false, true }) do
+            for _, file in ipairs(files) do
+                require("atone").setup({ ui = { compact = compact, branch_symbols = true } })
+                check_branch_graph_consistency("tests/" .. file, "tests/" .. file .. ".undo")
+            end
+        end
     end)
 end)

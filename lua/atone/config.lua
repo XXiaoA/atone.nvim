@@ -81,6 +81,9 @@ M.opts = {
         border = "single",
         -- compact graph style
         compact = false,
+        -- Draw the undo tree with git branch drawing symbols (U+F5D0-U+F60D).
+        -- Requires kitty >= 0.36.2, wezterm >= 2025-04-15 or ghostty >= 1.0.
+        branch_symbols = false,
         node_label = {
             custom = false,
             ---@param ctx AtoneNodeLabelContext
@@ -98,6 +101,52 @@ M.opts = {
         },
     },
 }
+
+---@type table<string, AtoneGraphSymbols>
+local symbol_sets = {
+    default = {
+        node = "●",
+        vline = "│",
+        hline = "─",
+        fork = "├",
+        merge = "┴",
+        corner = "╯",
+    },
+    branch = {
+        node = "",
+        vline = "",
+        hline = "",
+        fork = "",
+        merge = "",
+        corner = "", -- upper-left arc
+        -- Dynamic node glyphs: each node picks the glyph matching its actual connections instead of a plain dot.
+        -- Keys are bit masks of the connections: up = 1, down = 2, left = 4, right = 8.
+        node_glyphs = {
+            [0] = "", -- no connections
+            [1] = "", -- up
+            [2] = "", -- down
+            [3] = "", -- up + down
+            [4] = "", -- left
+            [5] = "", -- up + left
+            [6] = "", -- down + left
+            [7] = "", -- up + down + left
+            [8] = "", -- right
+            [9] = "", -- up + right
+            [10] = "", -- down + right
+            [11] = "", -- up + down + right
+            [12] = "", -- left + right
+            [13] = "", -- up + left + right
+            [14] = "", -- down + left + right
+            [15] = "", -- up + down + left + right
+        },
+    },
+}
+
+--- Resolve the graph symbol set from `ui.branch_symbols`.
+---@return AtoneGraphSymbols
+function M.get_graph_symbols()
+    return M.opts.ui.branch_symbols and symbol_sets.branch or symbol_sets.default
+end
 
 ---@param user_opts? AtoneConfig
 function M.merge_config(user_opts)

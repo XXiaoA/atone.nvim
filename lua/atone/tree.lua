@@ -347,8 +347,9 @@ function M.render(marks_labels, sticky_ref)
     M.total = total
 
     local compact = config.opts.ui.compact
+    local s = config.get_graph_symbols()
     local root_lnum = compact and total or 2 * total - 1
-    M.lines[root_lnum] = "●"
+    M.lines[root_lnum] = s.node
     M.lnum_to_seq[root_lnum] = 0
     id = 2
     while id <= total do
@@ -359,33 +360,33 @@ function M.render(marks_labels, sticky_ref)
         local node_lnum = compact and total - id + 1 or (total - id) * 2 + 1
         M.lnum_to_seq[node_lnum] = seq
         if depth == 1 then
-            M.lines[node_lnum] = "●"
+            M.lines[node_lnum] = s.node
         else
-            M.lines[node_lnum] = "│" .. (" "):rep(node.depth * 2 - 3) .. "●"
+            M.lines[node_lnum] = s.vline .. (" "):rep(node.depth * 2 - 3) .. s.node
         end
         if not compact then
-            M.lines[node_lnum + 1] = "│" -- line after this node
+            M.lines[node_lnum + 1] = s.vline -- line after this node
         end
         if not node.fork and depth ~= 1 then
             local lnum_is_drawing = node_lnum + 1
             local parent_index = compact and total - M.seq_2id(node.parent) + 1 or (total - M.seq_2id(node.parent)) * 2 + 1 -- index of parent node
-            while lnum_is_drawing < parent_index and get_char(M.lines[lnum_is_drawing], depth * 2 - 1) ~= "●" do
-                if get_char(M.lines[lnum_is_drawing], depth * 2 - 1) ~= "├" then
-                    M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], depth * 2 - 1, "│")
+            while lnum_is_drawing < parent_index and get_char(M.lines[lnum_is_drawing], depth * 2 - 1) ~= s.node do
+                if get_char(M.lines[lnum_is_drawing], depth * 2 - 1) ~= s.fork then
+                    M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], depth * 2 - 1, s.vline)
                 end
                 lnum_is_drawing = lnum_is_drawing + 1
             end
             if depth ~= parent_depth then
-                if not compact or get_char(M.lines[lnum_is_drawing], depth * 2 - 1) == "●" then
+                if not compact or get_char(M.lines[lnum_is_drawing], depth * 2 - 1) == s.node then
                     lnum_is_drawing = lnum_is_drawing - 1
                 end
-                if get_char(M.lines[lnum_is_drawing], depth * 2) == "─" then
+                if get_char(M.lines[lnum_is_drawing], depth * 2) == s.hline then
                     --  ●
                     --  │
                     --  │ ●
                     -- ─┴─╯
                     --  ^
-                    M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], depth * 2 - 1, "┴")
+                    M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], depth * 2 - 1, s.merge)
                 else
                     -- condition check for compact style graph
                     -- ●              ●
@@ -393,25 +394,25 @@ function M.render(marks_labels, sticky_ref)
                     -- ├─╯    ->      ├─●
                     -- │ ●            │ ●
                     -- ●─╯            ●─╯
-                    if not compact or get_char(M.lines[lnum_is_drawing], depth * 2 - 1) ~= "●" then
-                        M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], depth * 2 - 1, "╯")
+                    if not compact or get_char(M.lines[lnum_is_drawing], depth * 2 - 1) ~= s.node then
+                        M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], depth * 2 - 1, s.corner)
                     end
                 end
                 for pos = parent_depth * 2, depth * 2 - 2 do
                     if get_char(M.lines[lnum_is_drawing], pos) == " " then
-                        M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], pos, "─")
-                    elseif get_char(M.lines[lnum_is_drawing], pos) == "╯" then
-                        M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], pos, "┴")
+                        M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], pos, s.hline)
+                    elseif get_char(M.lines[lnum_is_drawing], pos) == s.corner then
+                        M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], pos, s.merge)
                     end
                 end
-                if get_char(M.lines[lnum_is_drawing], parent_depth * 2 - 1) ~= "●" then
-                    M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], parent_depth * 2 - 1, "├")
+                if get_char(M.lines[lnum_is_drawing], parent_depth * 2 - 1) ~= s.node then
+                    M.lines[lnum_is_drawing] = set_char_at(M.lines[lnum_is_drawing], parent_depth * 2 - 1, s.fork)
                 end
             end
         elseif node.fork then
-            M.lines[node_lnum] = set_char_at(M.lines[node_lnum], parent_depth * 2 - 1, "├")
+            M.lines[node_lnum] = set_char_at(M.lines[node_lnum], parent_depth * 2 - 1, s.fork)
             for i = parent_depth * 2, depth * 2 - 2 do
-                M.lines[node_lnum] = set_char_at(M.lines[node_lnum], i, "─")
+                M.lines[node_lnum] = set_char_at(M.lines[node_lnum], i, s.hline)
             end
         end
 
@@ -422,6 +423,53 @@ function M.render(marks_labels, sticky_ref)
     extmark_meta.col = label_col
     extmark_meta.topline = nil
     extmark_meta.botline = nil
+
+    -- Replace plain node dots with connection-aware node glyphs (branch
+    -- symbol set). A node connects up/down when the cell directly above/below
+    -- it in the same column is a graph line, or when the node there is its
+    -- child (above) / parent (below) in the same branch. `left`/`right`
+    -- count when the classic renderer draws `─` touching that edge of the
+    -- node.
+    if s.node_glyphs then
+        -- Lines whose bottom edge has an endpoint (a node below them connects
+        -- upward): vline and fork. corner/merge only reach upward, so a node
+        -- below them is not connected. Lines whose top edge has an endpoint
+        -- (a node above them connects downward): vline, fork, corner, merge.
+        local is_up_line = { [s.vline] = true, [s.fork] = true }
+        local is_down_line = {
+            [s.vline] = true,
+            [s.fork] = true,
+            [s.corner] = true,
+            [s.merge] = true,
+        }
+        local replacements = {}
+        for lnum, seq in pairs(M.lnum_to_seq) do
+            local node = M.nodes[seq]
+            local col = node.depth * 2 - 1
+            local above = lnum > 1 and M.lines[lnum - 1] and get_char(M.lines[lnum - 1], col) or nil
+            local below = M.lines[lnum + 1] and get_char(M.lines[lnum + 1], col) or nil
+            local left = col > 1 and get_char(M.lines[lnum], col - 1) == s.hline
+            local right = get_char(M.lines[lnum], col + 1) == s.hline
+            -- Same-column check: a parent/child in a different column (fork)
+            -- never counts as a vertical connection.
+            local above_seq = M.lnum_to_seq[lnum - 1]
+            local below_seq = M.lnum_to_seq[lnum + 1]
+            local same_column_above = above_seq ~= nil and M.nodes[above_seq].depth == node.depth
+            local same_column_below = below_seq ~= nil and M.nodes[below_seq].depth == node.depth
+            -- A same-column node above/below connects only when it belongs
+            -- to the same branch: the node's own child above, or parent below.
+            local up = is_up_line[above] == true or (same_column_above and above_seq == node.child)
+            local down = is_down_line[below] == true or (same_column_below and below_seq == node.parent)
+            local conn = (up and 1 or 0) + (down and 2 or 0) + (left and 4 or 0) + (right and 8 or 0)
+            local glyph = s.node_glyphs[conn]
+            if glyph then
+                replacements[lnum] = { col = col, ch = glyph }
+            end
+        end
+        for lnum, data in pairs(replacements) do
+            M.lines[lnum] = set_char_at(M.lines[lnum], data.col, data.ch)
+        end
+    end
 
     if not config.opts.ui.node_label.custom then
         for i = 1, total do

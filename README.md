@@ -15,7 +15,9 @@
                 <img alt="License" src="https://img.shields.io/github/license/XXiaoA/atone.nvim?color=%23DDB6F2&label=LICENSE&logo=codesandbox&style=for-the-badge&logoColor=D9E0EE&labelColor=302D41"/></a>
 </p>
 
-<img width="1045" height="622" alt="Image" src="https://github.com/user-attachments/assets/c0aca002-9404-418d-acbf-78e6c4e2c5a0" />
+<img width="997" height="589" alt="image" src="https://github.com/user-attachments/assets/fd536473-9de2-4c5a-a7a3-ff6893fc8f2a" />
+
+> with `compact` and `branch_symbols` enabled
 
 ## Features
 
@@ -156,6 +158,9 @@ require("atone").setup({
         border = "single",
         -- compact graph style
         compact = false,
+        -- Draw the undo tree with git branch drawing symbols (U+F5D0-U+F60D).
+        -- Requires kitty >= 0.36.2, wezterm >= 2025-04-15 or ghostty >= 1.0.
+        branch_symbols = false,
         node_label = {
             custom = false,
             ---@param ctx AtoneNodeLabelContext
@@ -174,6 +179,15 @@ require("atone").setup({
     },
 })
 ```
+
+### Graph Symbols
+
+With `ui.branch_symbols = true`, the undo tree is drawn with the [git branch drawing symbols](https://github.com/rbong/flog-symbols) codepoints (`U+F5D0`-`U+F60D`) introduced by [vim-flog](https://github.com/rbong/vim-flog), instead of the classic box-drawing characters. All terminals that support them use the **same codepoints** and render the glyphs themselves (no font needed):
+- kitty >= 0.36.2
+- wezterm >= 2025-04-15
+- ghostty >= 1.0
+
+Other terminals need a patched font such as [flog-symbols](https://github.com/rbong/flog-symbols) to show the glyphs at all, and even then the connecting lines are not guaranteed to line up.
 
 ### Custom Labels
 

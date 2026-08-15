@@ -108,9 +108,19 @@
 ---@field formatter? fun(ctx: AtoneNodeLabelContext): AtoneNodeLabel
 ---@field extmark_opts? vim.api.keyset.set_extmark
 
+---@class AtoneGraphSymbols
+---@field node string
+---@field vline string
+---@field hline string
+---@field fork string
+---@field merge string
+---@field corner string
+---@field node_glyphs? table<integer, string>
+
 ---@class AtoneUIConfig
 ---@field border? string
 ---@field compact? boolean
+---@field branch_symbols? boolean
 ---@field node_label? AtoneNodeLabelConfig
 
 ---@class AtoneConfig

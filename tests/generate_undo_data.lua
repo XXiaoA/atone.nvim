@@ -22,6 +22,10 @@ The path to save the final text file.
 [undo_file]   (string, optional, default: "tests/random_file.undo")
 The path to save the generated undo history file.
 
+[seed]        (number, optional, default: 0)
+The seed for the random number generator. Passing a fixed seed makes
+the generated history reproducible, which is useful for tests.
+
 == Examples ==
 -- Generate a simple history with 20 nodes
 nvim --headless -l tests/generate_undo_data.lua 20
@@ -46,6 +50,8 @@ local num_nodes = tonumber(arg and arg[1]) or 10
 local undo_chance = tonumber(arg and arg[2]) or 0.1
 local output_file = (arg and arg[3]) or "tests/random_file.txt"
 local undo_file = (arg and arg[4]) or "tests/random_file.undo"
+local seed = tonumber(arg and arg[5]) or 0
+math.randomseed(seed)
 
 print("Generating test data...")
 print("  Number of undo nodes: " .. num_nodes)
