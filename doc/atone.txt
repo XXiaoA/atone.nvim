@@ -1,4 +1,4 @@
-*atone.txt*           For Neovim >= 0.11.3           Last change: 2026 July 30
+*atone.txt*          For Neovim >= 0.11.3          Last change: 2026 August 15
 
 ==============================================================================
 Table of Contents                                    *atone-table-of-contents*
@@ -8,10 +8,14 @@ How it relates to nvim's built-in `:undotree`?  |atone-how-it-relates-to-nvim's-
 Installation ............................................ |atone-installation|
 Commands .................................................... |atone-commands|
 Configuration .......................................... |atone-configuration|
+Graph Symbols .......................................... |atone-graph-symbols|
 Custom Labels .......................................... |atone-custom-labels|
 Keymap Actions ........................................ |atone-keymap-actions|
 Highlighting ............................................ |atone-highlighting|
 Credits ...................................................... |atone-credits|
+
+  with `compact` and `branch_symbols` enabled
+
 
 ------------------------------------------------------------------------------
 FEATURES                                                      *atone-features*
@@ -167,6 +171,9 @@ Here are the default options:
             border = "single",
             -- compact graph style
             compact = false,
+            -- Draw the undo tree with git branch drawing symbols (U+F5D0-U+F60D).
+            -- Requires kitty >= 0.36.2, wezterm >= 2025-04-15 or ghostty >= 1.0.
+            branch_symbols = false,
             node_label = {
                 custom = false,
                 ---@param ctx AtoneNodeLabelContext
@@ -185,6 +192,24 @@ Here are the default options:
         },
     })
 <
+
+                                                                              
+GRAPH SYMBOLS                                            *atone-graph-symbols*
+
+With `ui.branch_symbols = true`, the undo tree is drawn with the git branch
+drawing symbols <https://github.com/rbong/flog-symbols> codepoints
+(`U+F5D0`-`U+F60D`) introduced by vim-flog
+<https://github.com/rbong/vim-flog>, instead of the classic box-drawing
+characters. All terminals that support them use the **same codepoints** and
+render the glyphs themselves (no font needed):
+
+- kitty >= 0.36.2
+- wezterm >= 2025-04-15
+- ghostty >= 1.0
+Other terminals need a patched font such as flog-symbols
+<https://github.com/rbong/flog-symbols> to show the glyphs at all, and even
+then the connecting lines are not guaranteed to line up.
+
 
                                                                               
 CUSTOM LABELS                                            *atone-custom-labels*
