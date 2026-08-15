@@ -170,10 +170,12 @@ Here are the default options:
             -- refer to `:h 'winborder'`
             border = "single",
             -- compact graph style
-            compact = false,
+            compact = true,
             -- Draw the undo tree with git branch drawing symbols (U+F5D0-U+F60D).
-            -- Requires kitty >= 0.36.2, wezterm >= 2025-04-15 or ghostty >= 1.0.
-            branch_symbols = false,
+            -- "auto": enable when the terminal renders them natively
+            --   (kitty >= 0.36.2, wezterm >= 2025-04-15, ghostty >= 1.0).
+            -- true: force enable. false: disable.
+            branch_symbols = "auto",
             node_label = {
                 custom = false,
                 ---@param ctx AtoneNodeLabelContext
@@ -196,12 +198,13 @@ Here are the default options:
                                                                               
 GRAPH SYMBOLS                                            *atone-graph-symbols*
 
-With `ui.branch_symbols = true`, the undo tree is drawn with the git branch
-drawing symbols <https://github.com/rbong/flog-symbols> codepoints
-(`U+F5D0`-`U+F60D`) introduced by vim-flog
-<https://github.com/rbong/vim-flog>, instead of the classic box-drawing
-characters. All terminals that support them use the **same codepoints** and
-render the glyphs themselves (no font needed):
+With `ui.branch_symbols = "auto"` (the default), the undo tree is drawn with
+the git branch drawing symbols <https://github.com/rbong/flog-symbols>
+codepoints (`U+F5D0`-`U+F60D`) introduced by vim-flog
+<https://github.com/rbong/vim-flog> when the terminal renders them natively,
+and falls back to the classic box-drawing characters otherwise. All terminals
+that support them use the **same codepoints** and render the glyphs themselves
+(no font needed):
 
 - kitty >= 0.36.2
 - wezterm >= 2025-04-15
@@ -209,6 +212,10 @@ render the glyphs themselves (no font needed):
 Other terminals need a patched font such as flog-symbols
 <https://github.com/rbong/flog-symbols> to show the glyphs at all, and even
 then the connecting lines are not guaranteed to line up.
+
+Detection relies on environment signals that do not survive SSH, so remote
+sessions fall back to the classic symbols; set `branch_symbols = true`
+explicitly to force them.
 
 
                                                                               
