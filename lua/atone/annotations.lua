@@ -120,7 +120,7 @@
 ---@class AtoneUIConfig
 ---@field border? string
 ---@field compact? boolean
----@field branch_symbols? boolean
+---@field branch_symbols? boolean|"auto"
 ---@field node_label? AtoneNodeLabelConfig
 
 ---@class AtoneConfig

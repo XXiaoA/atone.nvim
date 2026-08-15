@@ -12,3 +12,8 @@ end
 
 vim.opt.rtp:prepend(".")
 vim.opt.rtp:prepend(plenary_path)
+
+-- Disable branch symbol auto-detection so tests are independent of the host
+-- terminal (a kitty/wezterm/ghostty environment would otherwise flip the
+-- default-symbol assertions). Tests that need branch symbols opt in explicitly.
+require("atone").setup({ ui = { branch_symbols = false } })

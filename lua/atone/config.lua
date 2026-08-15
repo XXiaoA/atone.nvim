@@ -80,10 +80,12 @@ M.opts = {
         -- refer to `:h 'winborder'`
         border = "single",
         -- compact graph style
-        compact = false,
+        compact = true,
         -- Draw the undo tree with git branch drawing symbols (U+F5D0-U+F60D).
-        -- Requires kitty >= 0.36.2, wezterm >= 2025-04-15 or ghostty >= 1.0.
-        branch_symbols = false,
+        -- "auto": enable when the terminal renders them natively
+        --   (kitty >= 0.36.2, wezterm >= 2025-04-15, ghostty >= 1.0).
+        -- true: force enable. false: disable.
+        branch_symbols = "auto",
         node_label = {
             custom = false,
             ---@param ctx AtoneNodeLabelContext
@@ -145,7 +147,25 @@ local symbol_sets = {
 --- Resolve the graph symbol set from `ui.branch_symbols`.
 ---@return AtoneGraphSymbols
 function M.get_graph_symbols()
-    return M.opts.ui.branch_symbols and symbol_sets.branch or symbol_sets.default
+    local branch = M.opts.ui.branch_symbols
+    if branch == "auto" then
+        -- Detect whether the terminal renders the branch drawing codepoints
+        -- (U+F5D0-U+F60D) natively. Signal variables are used instead of TERM
+        -- where possible because they survive a local tmux; over SSH or
+        -- unknown environments the signals are lost and this safely falls
+        -- back to the classic symbols.
+        local term = vim.env.TERM or ""
+        local term_program = vim.env.TERM_PROGRAM or ""
+        branch = vim.env.KITTY_PID ~= nil
+            or vim.env.WEZTERM_PANE ~= nil
+            or term_program == "WezTerm"
+            or term_program == "ghostty"
+            or vim.env.GHOSTTY_RESOURCES_DIR ~= nil
+            or term:find("kitty", 1, true) ~= nil
+            or term:find("ghostty", 1, true) ~= nil
+            or term:find("wezterm", 1, true) ~= nil
+    end
+    return branch and symbol_sets.branch or symbol_sets.default
 end
 
 ---@param user_opts? AtoneConfig
