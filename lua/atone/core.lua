@@ -10,6 +10,8 @@ local utils = require("atone.utils")
 local M = {
     _show = nil,
     attach_buf = nil,
+    _source_win = nil,
+    _source_width = nil,
     augroup = api.nvim_create_augroup("atone", { clear = true }),
     _tree_win = nil,
     _float_win = nil,
@@ -141,8 +143,12 @@ end
 local function compute_tree_width(lines)
     local width = config.opts.layout.width
     if width ~= "adaptive" then
+        local base_width = vim.o.columns
+        if config.opts.layout.scope == "window" and M._source_width then
+            base_width = M._source_width
+        end
         ---@diagnostic disable-next-line: param-type-mismatch
-        return width < 1 and math.floor(vim.o.columns * width + 0.5) or math.floor(width)
+        return width < 1 and math.floor(base_width * width + 0.5) or math.floor(width)
     end
 
     lines = lines or api.nvim_buf_get_lines(M._tree_buf, 0, 1, false)
@@ -153,6 +159,17 @@ end
 ---@return boolean?
 local function uses_floating_preview_diff()
     return config.opts.diff_cur_node.enabled and config.opts.diff_cur_node.width ~= "adaptive"
+end
+
+---@return integer
+local function compute_floating_preview_diff_width()
+    local width = config.opts.diff_cur_node.width
+    local base_width = vim.o.columns
+    if config.opts.layout.scope == "window" and M._source_width then
+        base_width = M._source_width
+    end
+    ---@diagnostic disable-next-line: param-type-mismatch
+    return width < 1 and math.floor(base_width * width + 0.5) or math.floor(width)
 end
 
 local function compute_diff_height()
@@ -167,12 +184,74 @@ local function compute_diff_height()
     return math.max(1, math.floor(height * config.opts.diff_cur_node.split_percent + 0.5))
 end
 
+---@return string
+local function get_tree_split_mode()
+    local direction = config.opts.layout.direction
+    if config.opts.layout.scope == "window" then
+        return direction == "left" and "aboveleft vsplit" or "belowright vsplit"
+    end
+    return direction == "left" and "topleft vsplit" or "botright vsplit"
+end
+
+---@param callback fun()
+local function with_window_scoped_sizing(callback)
+    if config.opts.layout.scope ~= "window" then
+        callback()
+        return
+    end
+
+    -- Keep pre-existing sibling splits fixed while Atone consumes space from
+    -- the invoking window. Their existing winfix settings are restored after.
+    local window_options = {}
+    for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+        if win ~= M._source_win and api.nvim_win_get_config(win).relative == "" then
+            local options = {
+                win = win,
+                winfixwidth = api.nvim_get_option_value("winfixwidth", { win = win }),
+                winfixheight = api.nvim_get_option_value("winfixheight", { win = win }),
+            }
+            window_options[#window_options + 1] = options
+            api.nvim_set_option_value("winfixwidth", true, { win = win })
+            api.nvim_set_option_value("winfixheight", true, { win = win })
+        end
+    end
+
+    local ok, err = xpcall(callback, debug.traceback)
+    for _, options in ipairs(window_options) do
+        if api.nvim_win_is_valid(options.win) then
+            api.nvim_set_option_value("winfixwidth", options.winfixwidth, { win = options.win })
+            api.nvim_set_option_value("winfixheight", options.winfixheight, { win = options.win })
+        end
+    end
+    if not ok then
+        error(err, 0)
+    end
+end
+
+---@param callback fun()
+local function with_tree_resizable_height(callback)
+    if config.opts.layout.scope ~= "window" then
+        callback()
+        return
+    end
+
+    local fixed_height = api.nvim_get_option_value("winfixheight", { win = M._tree_win })
+    api.nvim_set_option_value("winfixheight", false, { win = M._tree_win })
+    local ok, err = xpcall(callback, debug.traceback)
+    api.nvim_set_option_value("winfixheight", fixed_height, { win = M._tree_win })
+    if not ok then
+        error(err, 0)
+    end
+end
+
 local function resize_tree_window(lines)
     if not utils.win_exists(M._tree_win) then
         return
     end
 
-    api.nvim_win_set_width(M._tree_win, compute_tree_width(lines))
+    with_window_scoped_sizing(function()
+        api.nvim_win_set_width(M._tree_win, compute_tree_width(lines))
+    end)
 end
 
 local function pos_floating_preview_diff_win()
@@ -183,11 +262,7 @@ local function pos_floating_preview_diff_win()
         return
     end
 
-    local diff_width_conf = config.opts.diff_cur_node.width
-
-    local diff_width = diff_width_conf < 1 and math.floor(vim.o.columns * diff_width_conf + 0.5)
-        ---@diagnostic disable-next-line: param-type-mismatch
-        or math.floor(diff_width_conf)
+    local diff_width = compute_floating_preview_diff_width()
 
     local col = get_col(config.opts.layout.direction)
     local anchor = get_anchor(config.opts.layout.direction)
@@ -321,20 +396,21 @@ function M.open()
     end
 
     M._show = true
+    M._source_win = api.nvim_get_current_win()
+    M._source_width = api.nvim_win_get_width(M._source_win)
     M.attach_buf = api.nvim_get_current_buf()
 
-    local direction = config.opts.layout.direction == "left" and "topleft" or "botright"
-
     local width = compute_tree_width()
-    M._tree_win = utils.new_win(direction .. " vsplit", M._tree_buf, { win_config = { width = width } })
+    local tree_mode = get_tree_split_mode()
+    with_window_scoped_sizing(function()
+        M._tree_win = utils.new_win(tree_mode, M._tree_buf, { win_config = { width = width } })
+    end)
+
     if config.opts.diff_cur_node.enabled then
         local height = compute_diff_height()
-        local diff_width_conf = config.opts.diff_cur_node.width
 
         if uses_floating_preview_diff() then
-            local diff_width = diff_width_conf < 1 and math.floor(vim.o.columns * diff_width_conf + 0.5)
-                ---@diagnostic disable-next-line: param-type-mismatch
-                or math.floor(diff_width_conf)
+            local diff_width = compute_floating_preview_diff_width()
 
             if not (M._dummy_buf and api.nvim_buf_is_valid(M._dummy_buf)) then
                 M._dummy_buf = utils.new_buf()
@@ -348,7 +424,12 @@ function M.open()
                     end,
                 })
             end
-            M._dummy_win = utils.new_win("belowright split", M._dummy_buf, { win_config = { height = height } }, false)
+            with_window_scoped_sizing(function()
+                with_tree_resizable_height(function()
+                    M._dummy_win =
+                        utils.new_win("belowright split", M._dummy_buf, { win_config = { height = height } }, false)
+                end)
+            end)
 
             local anchor = get_anchor(config.opts.layout.direction)
             local col = get_col(config.opts.layout.direction)
@@ -399,7 +480,12 @@ function M.open()
 
             api.nvim_set_option_value("winhl", "Normal:Normal,FloatBorder:WinSeparator", { win = M._diff_win })
         else
-            M._diff_win = utils.new_win("belowright split", M._auto_diff_buf, { win_config = { height = height } }, false)
+            with_window_scoped_sizing(function()
+                with_tree_resizable_height(function()
+                    M._diff_win =
+                        utils.new_win("belowright split", M._auto_diff_buf, { win_config = { height = height } }, false)
+                end)
+            end)
         end
     end
 
@@ -515,6 +601,9 @@ function M.close()
         pcall(api.nvim_win_close, M._float_win, true)
         pcall(api.nvim_win_close, M._dummy_win, true)
         pcall(api.nvim_win_close, M._centered_diff_win, true)
+        if config.opts.layout.scope == "window" and M._source_win and api.nvim_win_is_valid(M._source_win) then
+            api.nvim_set_current_win(M._source_win)
+        end
     end
 end
 

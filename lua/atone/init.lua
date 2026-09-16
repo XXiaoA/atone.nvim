@@ -138,10 +138,12 @@ function M.setup(user_opts)
         api.nvim_create_autocmd("BufEnter", {
             group = core.augroup,
             callback = function(ctx)
+                local entering_win = api.nvim_get_current_win()
                 vim.schedule(function()
                     if
                         api.nvim_buf_is_valid(ctx.buf)
                         and core._show
+                        and (config.opts.layout.scope ~= "window" or entering_win == core._source_win)
                         and ctx.buf ~= core.attach_buf
                         and vim.bo[ctx.buf].bt == ""
                         and not vim.tbl_contains(config.opts.auto_attach.excluded_ft, vim.bo[ctx.buf].ft)
