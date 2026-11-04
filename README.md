@@ -81,9 +81,13 @@ require("atone").setup({
     layout = {
         ---@type "left"|"right"
         direction = "left",
+        ---@type "tabpage"|"window"
+        --- tabpage: place the tree at the tab-page edge (the default behavior).
+        --- window: place the tree beside the window that opened Atone.
+        scope = "tabpage",
         ---@type "adaptive"|number
         --- adaptive: adapt to width of tree graph
-        --- float < 1: width = vim.o.columns * value
+        --- float < 1: width = invoking-window width * value when scope is "window", otherwise vim.o.columns * value
         --- integer >= 1: absolute width
         width = 0.25,
     },
@@ -95,7 +99,7 @@ require("atone").setup({
         split_percent = 0.3,
         ---@type "adaptive"|number
         --- adaptive: same width as tree window (default)
-        --- float < 1: width = vim.o.columns * value
+        --- float < 1: width = invoking-window width * value when scope is "window", otherwise vim.o.columns * value
         --- integer >= 1: absolute width
         --- Note that non-adaptive values create a float diff window anchored to a hidden
         --- dummy split window. this is an implementation detail that may cause

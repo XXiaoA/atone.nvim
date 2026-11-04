@@ -2,6 +2,7 @@
 
 ---@alias AtoneWindowDirection "left"|"right"
 ---@alias AtoneWindowSize "adaptive"|number
+---@alias AtoneLayoutScope "tabpage"|"window"
 ---@alias AtoneKeymap string|string[]
 ---@alias AtoneNodeLabelChunk [string, string]
 ---@alias AtoneNodeLabel string|AtoneNodeLabelChunk[]
@@ -48,6 +49,7 @@
 
 ---@class AtoneLayoutConfig
 ---@field direction? AtoneWindowDirection
+---@field scope? AtoneLayoutScope Whether to place the tree at the tab-page edge or beside the invoking window.
 ---@field width? AtoneWindowSize
 
 ---@class AtoneDiffCurNodeConfig
